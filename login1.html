@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 / 注册 · Study Plan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-sky-50 font-sans text-slate-800">
+  <main class="relative mx-auto flex min-h-screen max-w-lg items-center px-4 py-10">
+    <section class="w-full rounded-3xl border border-white/70 bg-white/90 p-8 shadow-xl backdrop-blur">
+      <h1 class="text-center text-2xl font-bold text-slate-900">学习计划（账号版）</h1>
+      <p class="mt-3 text-center text-sm leading-relaxed text-slate-600">第一次登录请先注册  (∠・ω< )⌒☆</p>
+
+      <div class="mt-8 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <button id="tabLogin" class="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm">登录</button>
+        <button id="tabRegister" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500">注册</button>
+      </div>
+
+      <form id="authForm" class="mt-5 space-y-4">
+        <div>
+          <label id="identifierLabel" class="mb-1 block text-xs font-medium text-slate-600">用户名或邮箱</label>
+          <input id="username" required minlength="3" maxlength="64" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" placeholder="请输入用户名或邮箱" />
+        </div>
+        <div id="emailWrap" class="hidden">
+          <label class="mb-1 block text-xs font-medium text-slate-600">邮箱</label>
+          <input id="email" type="email" maxlength="128" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" placeholder="请输入邮箱（例如 abc@qq.com）" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600">密码</label>
+          <input id="password" required minlength="6" maxlength="72" type="password" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" placeholder="请输入密码（至少 6 位）" />
+        </div>
+        <p id="authHint" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></p>
+        <button id="submitBtn" type="submit" class="w-full rounded-xl bg-sky-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-sky-700">登录并进入</button>
+      </form>
+
+      <div class="mt-4 text-xs text-slate-500">
+        <span id="modeTip">还没有账号？点击上方“注册”</span>
+      </div>
+    </section>
+  </main>
+  <script src="app-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    (() => {
+      const AUTH_KEY = 'study-plan-auth';
+      const SUPABASE_URL = String(window.APP_CONFIG?.SUPABASE_URL || '').trim();
+      const SUPABASE_ANON_KEY = String(window.APP_CONFIG?.SUPABASE_ANON_KEY || '').trim();
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        alert('请先在 app-config.js 中配置 SUPABASE_URL 与 SUPABASE_ANON_KEY');
+        return;
+      }
+      const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const nativeAlert = window.alert.bind(window);
+      window.alert = (msg) => nativeAlert('(´▽`ʃ♡ƪ) ' + String(msg ?? ''));
+      const tabLogin = document.getElementById('tabLogin');
+      const tabRegister = document.getElementById('tabRegister');
+      const authForm = document.getElementById('authForm');
+      const identifierLabel = document.getElementById('identifierLabel');
+      const usernameEl = document.getElementById('username');
+      const emailWrap = document.getElementById('emailWrap');
+      const emailEl = document.getElementById('email');
+      const passwordEl = document.getElementById('password');
+      const submitBtn = document.getElementById('submitBtn');
+      const authHint = document.getElementById('authHint');
+      const modeTip = document.getElementById('modeTip');
+      let mode = 'login';
+
+      function setMode(next) {
+        mode = next === 'register' ? 'register' : 'login';
+        const isLogin = mode === 'login';
+        tabLogin.className = isLogin
+          ? 'rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm'
+          : 'rounded-lg px-3 py-2 text-sm font-semibold text-slate-500';
+        tabRegister.className = !isLogin
+          ? 'rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm'
+          : 'rounded-lg px-3 py-2 text-sm font-semibold text-slate-500';
+        submitBtn.textContent = isLogin ? '登录并进入' : '注册并进入';
+        modeTip.textContent = isLogin ? '还没有账号？点击上方“注册”' : '已有账号？点击上方“登录”';
+        identifierLabel.textContent = isLogin ? '用户名或邮箱' : '用户名';
+        usernameEl.placeholder = isLogin ? '请输入用户名或邮箱' : '请输入用户名';
+        emailWrap.classList.toggle('hidden', isLogin);
+        emailEl.required = !isLogin;
+        authHint.classList.add('hidden');
+      }
+
+      function showError(msg) {
+        authHint.textContent = msg || '操作失败，请稍后再试';
+        authHint.classList.remove('hidden');
+      }
+
+      async function ensureProfile(user, usernameMaybe) {
+        const username = String(usernameMaybe || user?.user_metadata?.username || user?.email || 'user')
+          .trim()
+          .slice(0, 32);
+        const payload = {
+          id: user.id,
+          email: user.email || null,
+          username: username || 'user',
+        };
+        const up = await sb.from('profiles').upsert([payload], { onConflict: 'id' });
+        if (up.error) throw up.error;
+        const q = await sb.from('profiles').select('username,email,role').eq('id', user.id).maybeSingle();
+        if (q.error) throw q.error;
+        return q.data || { username: payload.username, email: payload.email, role: 'user' };
+      }
+
+      const cached = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+      if (cached?.token && cached?.user?.id) {
+        location.replace('plan.html');
+        return;
+      }
+
+      tabLogin.onclick = () => setMode('login');
+      tabRegister.onclick = () => setMode('register');
+      setMode('login');
+
+      authForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const username = String(usernameEl.value || '').trim();
+        const email = String(emailEl.value || '').trim().toLowerCase();
+        const password = String(passwordEl.value || '');
+        if (mode === 'register') {
+          if (username.length < 3 || username.length > 32) {
+            showError('用户名长度需在 3 到 32 个字符之间');
+            return;
+          }
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            showError('邮箱格式不正确');
+            return;
+          }
+        } else {
+          if (!username) {
+            showError('请输入用户名或邮箱');
+            return;
+          }
+        }
+        if (password.length < 6 || password.length > 72) {
+          showError('密码长度需在 6 到 72 个字符之间');
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.classList.add('opacity-70', 'cursor-not-allowed');
+        authHint.classList.add('hidden');
+        try {
+          let sessionUser = null;
+          let accessToken = '';
+          if (mode === 'register') {
+            const { data, error } = await sb.auth.signUp({
+              email,
+              password,
+              options: { data: { username } },
+            });
+            if (error) throw error;
+            if (!data?.session?.access_token || !data?.user?.id) {
+              throw new Error('注册成功，请先完成邮箱验证后再登录');
+            }
+            sessionUser = data.user;
+            accessToken = data.session.access_token;
+          } else {
+            const identifier = username;
+            const loginEmail = /@/.test(identifier) ? identifier.toLowerCase() : '';
+            if (!loginEmail) throw new Error('Supabase 版本请使用邮箱登录');
+            const { data, error } = await sb.auth.signInWithPassword({ email: loginEmail, password });
+            if (error) throw error;
+            if (!data?.session?.access_token || !data?.user?.id) throw new Error('登录失败');
+            sessionUser = data.user;
+            accessToken = data.session.access_token;
+          }
+          const profile = await ensureProfile(sessionUser, mode === 'register' ? username : null);
+          localStorage.setItem(
+            AUTH_KEY,
+            JSON.stringify({
+              token: accessToken,
+              user: {
+                id: sessionUser.id,
+                email: profile.email || sessionUser.email || '',
+                username: profile.username || sessionUser.email || '',
+                role: profile.role || 'user',
+              },
+            })
+          );
+          location.replace('plan.html');
+        } catch (err) {
+          showError(err.message || '请求失败');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

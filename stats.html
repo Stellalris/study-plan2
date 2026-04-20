@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>
+    (function () {
+      var AUTH_KEY = 'study-plan-auth';
+      try {
+        var raw = localStorage.getItem(AUTH_KEY);
+        var auth = raw ? JSON.parse(raw) : null;
+        if (!auth || !auth.token || !auth.user || !auth.user.id) {
+          location.replace('login1.html');
+        }
+      } catch (e) {
+        location.replace('login1.html');
+      }
+    })();
+  </script>
+  <title>数据统计详情 · Study Plan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"DM Sans"', 'system-ui', 'sans-serif'], display: ['"Outfit"', 'system-ui', 'sans-serif'] },
+          colors: { brand: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' } },
+          boxShadow: { glass: '0 8px 32px rgba(14,165,233,.08),0 2px 8px rgba(0,0,0,.05)' },
+        },
+      },
+    };
+  </script>
+  <style>
+    .glass-panel { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-50 via-brand-50/40 to-indigo-50/80 font-sans text-slate-800 antialiased">
+  <div class="pointer-events-none fixed inset-0 overflow-hidden">
+    <div class="absolute -left-32 top-20 h-96 w-96 rounded-full bg-sky-300/20 blur-3xl"></div>
+    <div class="absolute -right-20 bottom-32 h-80 w-80 rounded-full bg-violet-300/25 blur-3xl"></div>
+  </div>
+
+  <main class="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <a href="plan.html" class="mb-2 inline-flex items-center gap-2 text-sm font-medium text-brand-700 hover:text-brand-800"><i class="fa-solid fa-arrow-left"></i> 返回学习计划</a>
+        <h1 class="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl"><i class="fa-solid fa-chart-line mr-2 text-brand-500"></i>数据统计详情</h1>
+        <p class="mt-2 max-w-2xl text-sm text-slate-600">按任务数据计算<strong class="text-slate-800">计划完成度</strong>；番茄钟每次完整「专注」记录写入<strong class="text-slate-800">数据库</strong>；<strong class="text-slate-800">学习习惯</strong>打卡与计划页联动。日 / 月 / 年总结同样存库，与学习计划页、回顾总结互通。</p>
+      </div>
+      <span id="userChip" class="self-start rounded-lg bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-600"></span>
+    </header>
+
+    <section class="mb-8 grid gap-4 sm:grid-cols-3">
+      <article class="glass-panel rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <p class="text-xs font-semibold uppercase tracking-wide text-brand-600">今日</p>
+        <p id="dayDateLabel" class="mt-1 font-mono text-xs text-slate-500"></p>
+        <p id="dayRate" class="mt-3 font-display text-3xl font-bold text-slate-900">—</p>
+        <p id="dayTasks" class="mt-2 text-sm text-slate-600"></p>
+        <p id="dayPlanMin" class="mt-1 text-xs text-slate-500"></p>
+      </article>
+      <article class="glass-panel rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <p class="text-xs font-semibold uppercase tracking-wide text-violet-600">本周（周一至周日）</p>
+        <p id="weekRangeLabel" class="mt-1 text-xs text-slate-500"></p>
+        <p id="weekRate" class="mt-3 font-display text-3xl font-bold text-slate-900">—</p>
+        <p id="weekTasks" class="mt-2 text-sm text-slate-600"></p>
+        <p id="weekPlanMin" class="mt-1 text-xs text-slate-500"></p>
+      </article>
+      <article class="glass-panel rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">本月</p>
+        <p id="monthLabel" class="mt-1 text-xs text-slate-500"></p>
+        <p id="monthRate" class="mt-3 font-display text-3xl font-bold text-slate-900">—</p>
+        <p id="monthTasks" class="mt-2 text-sm text-slate-600"></p>
+        <p id="monthPlanMin" class="mt-1 text-xs text-slate-500"></p>
+      </article>
+    </section>
+
+    <section class="mb-8 grid gap-4 sm:grid-cols-3">
+      <article class="glass-panel rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">今日 · 学习习惯</p>
+        <p id="habitDayRate" class="mt-3 font-display text-3xl font-bold text-slate-900">—</p>
+        <p id="habitDayDetail" class="mt-2 text-sm text-slate-600">与计划页「每日习惯」数据一致。</p>
+      </article>
+      <article class="glass-panel rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">本周 · 习惯打卡强度</p>
+        <p id="habitWeekRate" class="mt-3 font-display text-3xl font-bold text-slate-900">—</p>
+        <p id="habitWeekDetail" class="mt-2 text-sm text-slate-600">本周内已完成打卡条数 / 理论上限（习惯数×7）。</p>
+      </article>
+      <article class="glass-panel rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">本月 · 习惯打卡强度</p>
+        <p id="habitMonthRate" class="mt-3 font-display text-3xl font-bold text-slate-900">—</p>
+        <p id="habitMonthDetail" class="mt-2 text-sm text-slate-600">本月内已完成打卡条数 / 理论上限（习惯数×当月天数）。</p>
+      </article>
+    </section>
+
+    <section class="glass-panel mb-8 rounded-2xl border border-white/60 bg-white/70 p-6 shadow-glass">
+      <h2 class="mb-1 font-display text-lg font-semibold text-slate-900"><i class="fa-solid fa-layer-group mr-2 text-teal-600"></i>专注与学习习惯（近 14 日）</h2>
+      <p class="mb-4 text-xs text-slate-500">橙色柱：当日完成的学习习惯打卡次数；蓝色柱：番茄专注分钟（与上方「番茄钟」区块同源）。便于对照「是否学得够久」与「习惯是否坚持」。</p>
+      <div class="relative h-72 w-full"><canvas id="chartHabitPomo14"></canvas></div>
+    </section>
+
+    <section class="glass-panel mb-8 rounded-2xl border border-white/60 bg-white/70 p-6 shadow-glass">
+      <h2 class="mb-2 font-display text-lg font-semibold text-slate-900"><i class="fa-solid fa-chart-pie mr-2 text-teal-500"></i>各模块计划完成情况</h2>
+      <p class="mb-4 text-xs text-slate-500">按任务<strong>分类（category）</strong>汇总。饼图扇区大小 = 该模块任务条数；颜色使用马克龙色盘区分不同模块。</p>
+      <div class="mb-5 flex flex-wrap items-end gap-3">
+        <div class="flex flex-col gap-1">
+          <span class="text-xs font-medium text-slate-600">统计维度</span>
+          <select id="pieGranularity" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-200">
+            <option value="month">按月</option>
+            <option value="year">按年</option>
+          </select>
+        </div>
+        <div id="pieMonthWrap" class="flex flex-col gap-1">
+          <label for="pieMonthPick" class="text-xs text-slate-500">月份</label>
+          <input id="pieMonthPick" type="month" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+        </div>
+        <div id="pieYearWrap" class="hidden flex flex-col gap-1">
+          <label for="pieYearPick" class="text-xs text-slate-500">年份</label>
+          <input id="pieYearPick" type="number" min="2020" max="2100" step="1" class="w-36 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="grid gap-6 lg:grid-cols-2 lg:items-center">
+        <div class="relative mx-auto h-72 w-full max-w-md"><canvas id="chartModulePie"></canvas></div>
+        <div class="min-h-0 overflow-x-auto rounded-xl border border-slate-100">
+          <table class="w-full min-w-[300px] text-left text-sm">
+            <thead class="border-b border-slate-100 bg-slate-50/90 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2">模块</th>
+                <th class="px-3 py-2 text-right">任务数</th>
+                <th class="px-3 py-2 text-right">已完成</th>
+                <th class="px-3 py-2 text-right">完成率</th>
+                <th class="px-3 py-2 text-right">计划分钟</th>
+              </tr>
+            </thead>
+            <tbody id="moduleBreakdownBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+          <p id="moduleBreakdownEmpty" class="hidden px-4 py-8 text-center text-sm text-slate-500">该时间段暂无任务</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-8 grid gap-6 lg:grid-cols-2">
+      <article class="glass-panel flex flex-col rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <div class="mb-3 flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h2 class="font-display text-base font-semibold text-slate-900"><i class="fa-solid fa-calendar-days mr-2 text-violet-500"></i>月总结</h2>
+            <p class="mt-1 text-xs text-slate-500">保存至 <span class="font-mono text-[10px]">monthly_reviews</span>。</p>
+          </div>
+          <button type="button" id="btnToggleStatsMonthReview" class="shrink-0 rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-violet-900 hover:bg-violet-50">收起</button>
+        </div>
+        <div id="statsMonthReviewCollapsed" class="mb-2 hidden rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-2.5">
+          <p class="text-[10px] font-medium uppercase tracking-wide text-violet-600">已保存摘要</p>
+          <p id="statsMonthReviewPreview" class="mt-1 line-clamp-4 text-xs leading-relaxed text-slate-700"></p>
+        </div>
+        <div id="statsMonthReviewEditor" class="flex min-h-0 flex-1 flex-col gap-2">
+          <label class="text-xs font-medium text-slate-600" for="statsMonthPick">总结月份</label>
+          <input id="statsMonthPick" type="month" class="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" />
+          <label class="text-xs font-medium text-slate-600" for="statsMonthContent">月总结内容</label>
+          <textarea id="statsMonthContent" rows="5" maxlength="12000" class="min-h-[100px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm leading-relaxed outline-none focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100" placeholder="本月目标完成情况、亮点、不足与下月计划…"></textarea>
+          <div class="mt-1 flex flex-wrap gap-2">
+            <button type="button" id="btnStatsMonthSave" class="rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">提交月总结</button>
+            <button type="button" id="btnStatsMonthDelete" class="hidden rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50">删除</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="glass-panel flex flex-col rounded-2xl border border-white/60 bg-white/70 p-5 shadow-glass">
+        <div class="mb-3 flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h2 class="font-display text-base font-semibold text-slate-900"><i class="fa-solid fa-calendar mr-2 text-amber-600"></i>年总结</h2>
+            <p class="mt-1 text-xs text-slate-500">保存至 <span class="font-mono text-[10px]">yearly_reviews</span>。</p>
+          </div>
+          <button type="button" id="btnToggleStatsYearReview" class="shrink-0 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50">收起</button>
+        </div>
+        <div id="statsYearReviewCollapsed" class="mb-2 hidden rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2.5">
+          <p class="text-[10px] font-medium uppercase tracking-wide text-amber-800">已保存摘要</p>
+          <p id="statsYearReviewPreview" class="mt-1 line-clamp-4 text-xs leading-relaxed text-slate-700"></p>
+        </div>
+        <div id="statsYearReviewEditor" class="flex min-h-0 flex-1 flex-col gap-2">
+          <label class="text-xs font-medium text-slate-600" for="statsYearPick">总结年份</label>
+          <input id="statsYearPick" type="number" min="2020" max="2100" step="1" class="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" />
+          <label class="text-xs font-medium text-slate-600" for="statsYearContent">年总结内容</label>
+          <textarea id="statsYearContent" rows="5" maxlength="16000" class="min-h-[100px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm leading-relaxed outline-none focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-100" placeholder="全年回顾、成果、遗憾与来年方向…"></textarea>
+          <div class="mt-1 flex flex-wrap gap-2">
+            <button type="button" id="btnStatsYearSave" class="rounded-xl bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700">提交年总结</button>
+            <button type="button" id="btnStatsYearDelete" class="hidden rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50">删除</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="glass-panel mb-8 rounded-2xl border border-white/60 bg-white/70 p-6 shadow-glass">
+      <h2 class="mb-1 font-display text-lg font-semibold text-slate-900"><i class="fa-solid fa-clock mr-2 text-amber-500"></i>番茄钟专注时长</h2>
+      <p class="mb-5 text-xs text-slate-500">每次在首页<strong>完整跑完一轮「专注」倒计时</strong>后写入数据库（按用户、自然日汇总），换设备登录同一账号仍可查看。</p>
+      <div class="mb-6 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3">
+          <p class="text-xs font-medium text-amber-800">今日专注</p>
+          <p id="pomoDayMin" class="mt-1 font-display text-2xl font-bold text-slate-900">0</p>
+          <p class="text-xs text-slate-500">分钟</p>
+        </div>
+        <div class="rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3">
+          <p class="text-xs font-medium text-amber-800">本周专注</p>
+          <p id="pomoWeekMin" class="mt-1 font-display text-2xl font-bold text-slate-900">0</p>
+          <p class="text-xs text-slate-500">分钟</p>
+        </div>
+        <div class="rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3">
+          <p class="text-xs font-medium text-amber-800">本月专注</p>
+          <p id="pomoMonthMin" class="mt-1 font-display text-2xl font-bold text-slate-900">0</p>
+          <p class="text-xs text-slate-500">分钟</p>
+        </div>
+      </div>
+      <h3 class="mb-3 text-sm font-semibold text-slate-800">近 14 日专注（分钟/天）</h3>
+      <div class="relative h-64 w-full"><canvas id="chartPomo14"></canvas></div>
+    </section>
+
+    <section class="glass-panel rounded-2xl border border-white/60 bg-white/70 p-6 shadow-glass">
+      <h2 class="mb-3 font-display text-lg font-semibold text-slate-900"><i class="fa-solid fa-calendar-week mr-2 text-brand-500"></i>近 14 日计划时长（分钟/天）</h2>
+      <p class="mb-3 text-xs text-slate-500">当日所有任务的计划时长（<code class="rounded bg-slate-100 px-1">duration</code>）之和。</p>
+      <div class="relative h-56 w-full"><canvas id="chartPlan14"></canvas></div>
+    </section>
+  </main>
+
+  <script src="app-config.js"></script>
+  <script>
+  (() => {
+    const SUPABASE_URL = String(window.APP_CONFIG?.SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const SUPABASE_ANON_KEY = String(window.APP_CONFIG?.SUPABASE_ANON_KEY || '').trim();
+    const nativeAlert = window.alert.bind(window);
+    window.alert = (msg) => nativeAlert(`(๑•̀ㅂ•́)و✧ ${String(msg ?? '')}`);
+    if (!/^https?:\/\//i.test(SUPABASE_URL) || !SUPABASE_ANON_KEY) {
+      alert('请在 app-config.js 中配置 SUPABASE_URL 与 SUPABASE_ANON_KEY。');
+      return;
+    }
+    const AUTH_KEY = 'study-plan-auth';
+
+    let auth = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+    if (!auth?.token || !auth?.user?.id) {
+      location.replace('login1.html');
+      return;
+    }
+
+    const $ = (id) => document.getElementById(id);
+    const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const mondayOf = (d) => {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const w = x.getDay();
+      x.setDate(x.getDate() + (w === 0 ? -6 : 1 - w));
+      return x;
+    };
+    const addDays = (d, n) => {
+      const x = new Date(d);
+      x.setDate(x.getDate() + n);
+      return x;
+    };
+
+    function normalizeSqlDateKey(v) {
+      if (v == null || v === '') return '';
+      if (typeof v === 'string') {
+        const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (m) return m[1];
+        const t = Date.parse(v);
+        if (!Number.isNaN(t)) return fmtDate(new Date(t));
+        return v;
+      }
+      if (v instanceof Date) return fmtDate(v);
+      return String(v);
+    }
+
+    function formatDateZh(dateKey) {
+      const s = String(dateKey || '').trim();
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return s;
+      return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
+    }
+
+    function jwtSub(token) {
+      try {
+        const part = String(token || '').split('.')[1];
+        if (!part) return null;
+        const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+        return JSON.parse(atob(b64 + pad)).sub || null;
+      } catch {
+        return null;
+      }
+    }
+
+    function authUserId() {
+      return auth?.user?.id || jwtSub(auth.token);
+    }
+
+    async function sbRequest(pathAndQuery, init = {}) {
+      const qm = pathAndQuery.indexOf('?');
+      const p = qm >= 0 ? pathAndQuery.slice(0, qm) : pathAndQuery;
+      const q = qm >= 0 ? pathAndQuery.slice(qm + 1) : '';
+      const method = String(init.method || 'GET').toUpperCase();
+      const rawBody =
+        init.body == null ? null : typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
+      let res;
+      try {
+        const headers = {
+          Accept: 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: auth?.token ? `Bearer ${auth.token}` : `Bearer ${SUPABASE_ANON_KEY}`,
+        };
+        if (method !== 'GET' && method !== 'HEAD') headers['Content-Type'] = 'application/json';
+        if (init.headers && typeof init.headers === 'object') Object.assign(headers, init.headers);
+        const url = `${SUPABASE_URL}/rest/v1${p}${q ? `?${q}` : ''}`;
+        res = await fetch(url, {
+          method,
+          headers,
+          body: method === 'GET' || method === 'HEAD' ? undefined : rawBody,
+        });
+      } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        const net =
+          e instanceof TypeError || (typeof m === 'string' && m.toLowerCase().includes('failed to fetch'));
+        throw new Error(
+          net
+            ? `无法连接 Supabase（${SUPABASE_URL}）。请检查 app-config.js 与网络。`
+            : m
+        );
+      }
+      const text = await res.text();
+      if (res.status === 204) return null;
+      let data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { raw: text };
+        }
+      }
+      if (!res.ok) {
+        const msg =
+          (data && (data.message || data.error_description || data.hint)) ||
+          `请求失败（HTTP ${res.status}）`;
+        const err = new Error(msg);
+        err.httpStatus = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    function mapTaskRow(r) {
+      return {
+        id: String(r.id),
+        title: r.title,
+        date: normalizeSqlDateKey(r.date) || r.date,
+        priority: Number(r.priority) || 1,
+        duration: Number(r.duration) || 45,
+        category: r.category || '其他',
+        completed: !!r.completed,
+      };
+    }
+
+    function previewClip(text, max) {
+      const s = String(text || '')
+        .replace(/\r\n/g, '\n')
+        .trim();
+      const one = s.replace(/\s+/g, ' ');
+      if (one.length <= max) return one;
+      return one.slice(0, max) + '…';
+    }
+
+    async function fetchPomoDailyMap(from, to) {
+      const rows = await api(
+        `/api/pomodoro-sessions/daily?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      );
+      const m = Object.create(null);
+      if (Array.isArray(rows)) {
+        for (const r of rows) {
+          const d = String(r.date || '').slice(0, 10);
+          if (d) m[d] = Number(r.totalSec) || 0;
+        }
+      }
+      return m;
+    }
+
+    function pomoMinutesOnDay(map, dateKey) {
+      return Math.round((Number(map[dateKey]) || 0) / 60);
+    }
+
+    function pomoMinutesInRange(map, startKey, endKey) {
+      let sec = 0;
+      for (const [k, v] of Object.entries(map)) {
+        if (k >= startKey && k <= endKey) sec += Number(v) || 0;
+      }
+      return Math.round(sec / 60);
+    }
+
+    function pomoMinutesForMonthFromMap(map, y, m1) {
+      const prefix = `${y}-${String(m1).padStart(2, '0')}`;
+      let sec = 0;
+      for (const [k, v] of Object.entries(map)) {
+        if (k.startsWith(prefix)) sec += Number(v) || 0;
+      }
+      return Math.round(sec / 60);
+    }
+
+    async function api(path, options = {}) {
+      const method = String(options.method || 'GET').toUpperCase();
+      const [pathname, rawQs] = path.includes('?') ? path.split('?') : [path, ''];
+      let body = null;
+      if (options.body) {
+        try {
+          body = JSON.parse(options.body);
+        } catch {
+          body = null;
+        }
+      }
+
+      if (!authUserId()) throw new Error('登录已失效，请重新登录');
+      const uid = authUserId();
+
+      try {
+        if (pathname === '/api/tasks' && method === 'GET') {
+          const rows = await sbRequest(
+            '/tasks?select=id,title,date,priority,duration,category,completed&order=date.asc,priority.desc,id.asc'
+          );
+          return (Array.isArray(rows) ? rows : []).map(mapTaskRow);
+        }
+
+        if (pathname === '/api/month-reviews' && method === 'GET') {
+          const rows = await sbRequest('/monthly_reviews?select=id,review_month,content,updated_at&order=review_month.desc');
+          return (Array.isArray(rows) ? rows : []).map((r) => ({
+            id: String(r.id),
+            month: String(r.review_month ?? '').slice(0, 7),
+            content: String(r.content ?? ''),
+            updatedAt: r.updated_at || null,
+          }));
+        }
+        if (pathname === '/api/month-reviews' && method === 'POST') {
+          const month = String(body?.month ?? '').trim().slice(0, 7);
+          const content = String(body?.content ?? '').trim();
+          const existing = await sbRequest(`/monthly_reviews?select=id&review_month=eq.${encodeURIComponent(month)}&limit=1`);
+          const ex = Array.isArray(existing) && existing[0];
+          if (ex) {
+            await sbRequest(`/monthly_reviews?id=eq.${encodeURIComponent(String(ex.id))}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+              body: JSON.stringify({ content }),
+            });
+            return { id: String(ex.id), updated: true };
+          }
+          const ins = await sbRequest('/monthly_reviews', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
+            body: JSON.stringify([{ user_id: uid, review_month: month, content }]),
+          });
+          return { id: String((Array.isArray(ins) ? ins[0] : ins).id), updated: false };
+        }
+        if (pathname.startsWith('/api/month-reviews/') && method === 'DELETE') {
+          const rid = pathname.split('/').pop();
+          await sbRequest(`/monthly_reviews?id=eq.${encodeURIComponent(rid)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+          return { ok: true };
+        }
+
+        if (pathname === '/api/year-reviews' && method === 'GET') {
+          const rows = await sbRequest('/yearly_reviews?select=id,review_year,content,updated_at&order=review_year.desc');
+          return (Array.isArray(rows) ? rows : []).map((r) => ({
+            id: String(r.id),
+            year: String(r.review_year ?? '').slice(0, 4),
+            content: String(r.content ?? ''),
+            updatedAt: r.updated_at || null,
+          }));
+        }
+        if (pathname === '/api/year-reviews' && method === 'POST') {
+          const year = String(body?.year ?? '').trim().slice(0, 4);
+          const content = String(body?.content ?? '').trim();
+          const existing = await sbRequest(`/yearly_reviews?select=id&review_year=eq.${encodeURIComponent(year)}&limit=1`);
+          const ex = Array.isArray(existing) && existing[0];
+          if (ex) {
+            await sbRequest(`/yearly_reviews?id=eq.${encodeURIComponent(String(ex.id))}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+              body: JSON.stringify({ content }),
+            });
+            return { id: String(ex.id), updated: true };
+          }
+          const ins = await sbRequest('/yearly_reviews', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
+            body: JSON.stringify([{ user_id: uid, review_year: year, content }]),
+          });
+          return { id: String((Array.isArray(ins) ? ins[0] : ins).id), updated: false };
+        }
+        if (pathname.startsWith('/api/year-reviews/') && method === 'DELETE') {
+          const rid = pathname.split('/').pop();
+          await sbRequest(`/yearly_reviews?id=eq.${encodeURIComponent(rid)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+          return { ok: true };
+        }
+
+        if (pathname.startsWith('/api/pomodoro-sessions/daily') && method === 'GET') {
+          const sp = new URLSearchParams(rawQs);
+          const from = String(sp.get('from') || '').slice(0, 10);
+          const to = String(sp.get('to') || '').slice(0, 10);
+          const rows = await sbRequest(
+            `/pomodoro_sessions?select=session_date,duration_sec&session_date=gte.${encodeURIComponent(from)}&session_date=lte.${encodeURIComponent(to)}`
+          );
+          const map = new Map();
+          (Array.isArray(rows) ? rows : []).forEach((r) => {
+            const dk = normalizeSqlDateKey(r.session_date) || r.session_date;
+            map.set(dk, (map.get(dk) || 0) + (Number(r.duration_sec) || 0));
+          });
+          return [...map.entries()].map(([date, totalSec]) => ({ date, totalSec })).sort((a, b) => a.date.localeCompare(b.date));
+        }
+
+        if (pathname === '/api/habits' && method === 'GET') {
+          const rows = await sbRequest('/habits?select=id,title,sort_order');
+          return (Array.isArray(rows) ? rows : []).map((r) => ({
+            id: String(r.id),
+            title: String(r.title || ''),
+            sortOrder: Number(r.sort_order) || 0,
+          }));
+        }
+
+        if (pathname.startsWith('/api/habit-logs-range') && method === 'GET') {
+          const sp = new URLSearchParams(rawQs);
+          const from = String(sp.get('from') || '').slice(0, 10);
+          const to = String(sp.get('to') || '').slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+            throw new Error('habit-logs-range 需要 from、to 为 YYYY-MM-DD');
+          }
+          const rows = await sbRequest(
+            `/habit_logs?log_date=gte.${encodeURIComponent(from)}&log_date=lte.${encodeURIComponent(to)}`
+          );
+          return (Array.isArray(rows) ? rows : []).map((r) => ({
+            id: String(r.id),
+            habitId: String(r.habit_id),
+            date: normalizeSqlDateKey(r.log_date) || r.log_date,
+            completed: !!r.completed,
+          }));
+        }
+
+        throw new Error(`未实现的接口：${method} ${path}`);
+      } catch (e) {
+        if (e && e.httpStatus === 401) {
+          localStorage.removeItem(AUTH_KEY);
+          location.reload();
+        }
+        throw e;
+      }
+    }
+
+    function completionLine(total, done) {
+      if (!total) return '无计划任务';
+      return `已完成 <strong class="text-emerald-700">${done}</strong> / 共 <strong class="text-slate-800">${total}</strong> 项`;
+    }
+
+    function planLine(min) {
+      return `计划总时长（任务 estimated 合计）<strong class="text-slate-700">${min}</strong> 分钟`;
+    }
+
+    function formatRate(rate) {
+      if (rate == null) return '—';
+      return `${rate}%`;
+    }
+
+    function tasksInPieRange(allTasks, mode, monthYm, yearY) {
+      if (mode === 'month') {
+        const prefix = String(monthYm || '').slice(0, 7);
+        return allTasks.filter((t) => String(t.date || '').startsWith(prefix));
+      }
+      const y = String(yearY || '').slice(0, 4);
+      return allTasks.filter((t) => String(t.date || '').startsWith(y));
+    }
+
+    function aggregateByCategory(list) {
+      const map = new Map();
+      for (const t of list) {
+        const cat = (t.category && String(t.category).trim()) || '其他';
+        if (!map.has(cat)) map.set(cat, { total: 0, done: 0, minutes: 0 });
+        const o = map.get(cat);
+        o.total += 1;
+        if (t.completed) o.done += 1;
+        o.minutes += Number(t.duration) || 0;
+      }
+      return [...map.entries()]
+        .map(([name, o]) => ({
+          name,
+          total: o.total,
+          done: o.done,
+          rate: o.total ? Math.round((o.done / o.total) * 1000) / 10 : 0,
+          minutes: o.minutes,
+        }))
+        .sort((a, b) => b.total - a.total);
+    }
+
+    function macaronColorAt(index) {
+      const palette = [
+        '#F8BBD0', // 软粉
+        '#FFD3B6', // 杏橘
+        '#FFF1B8', // 奶黄
+        '#C8E6C9', // 薄荷绿
+        '#B3E5FC', // 天空蓝
+        '#D1C4E9', // 薰衣草
+        '#F8C8DC', // 樱花粉
+        '#B2DFDB', // 青瓷绿
+        '#C5CAE9', // 淡紫蓝
+        '#FFE0B2', // 蜜桃奶
+      ];
+      return palette[index % palette.length];
+    }
+
+    let tasks = [];
+    let habits = [];
+    let monthReviews = [];
+    let yearReviews = [];
+    let chartPomo = null;
+    let chartPlan = null;
+    let chartMod = null;
+    let chartHabitPomo = null;
+
+    let lastStatsMonthYm = '';
+    let lastStatsYearY = '';
+    let statsMonthCollapsed = false;
+    let statsYearCollapsed = false;
+
+    async function reloadReviewData() {
+      const [m, y] = await Promise.all([api('/api/month-reviews'), api('/api/year-reviews')]);
+      monthReviews = Array.isArray(m)
+        ? m.map((x) => ({
+            id: String(x.id),
+            month: String(x.month ?? '').slice(0, 7),
+            content: String(x.content ?? ''),
+            updatedAt: x.updatedAt,
+          }))
+        : [];
+      yearReviews = Array.isArray(y)
+        ? y.map((x) => ({
+            id: String(x.id),
+            year: String(x.year ?? '').slice(0, 4),
+            content: String(x.content ?? ''),
+            updatedAt: x.updatedAt,
+          }))
+        : [];
+    }
+
+    function setStatsMonthCollapsed(collapsed) {
+      statsMonthCollapsed = collapsed;
+      $('statsMonthReviewCollapsed').classList.toggle('hidden', !collapsed);
+      $('statsMonthReviewEditor').classList.toggle('hidden', collapsed);
+      $('btnToggleStatsMonthReview').textContent = collapsed ? '展开编辑' : '收起';
+    }
+
+    function setStatsYearCollapsed(collapsed) {
+      statsYearCollapsed = collapsed;
+      $('statsYearReviewCollapsed').classList.toggle('hidden', !collapsed);
+      $('statsYearReviewEditor').classList.toggle('hidden', collapsed);
+      $('btnToggleStatsYearReview').textContent = collapsed ? '展开编辑' : '收起';
+    }
+
+    function fillStatsMonthEditor() {
+      const ym = ($('statsMonthPick').value || '').slice(0, 7);
+      const r = monthReviews.find((x) => x.month === ym);
+      $('btnStatsMonthDelete').classList.toggle('hidden', !r);
+      $('btnStatsMonthSave').textContent = r ? '保存修改' : '提交月总结';
+      if (ym !== lastStatsMonthYm) {
+        $('statsMonthContent').value = r ? r.content : '';
+        lastStatsMonthYm = ym;
+      }
+      const has = !!(r && String(r.content || '').trim());
+      $('statsMonthReviewPreview').textContent = has ? previewClip(r.content, 220) : '';
+    }
+
+    function fillStatsYearEditor() {
+      const y = String(Math.floor(Number($('statsYearPick').value)) || new Date().getFullYear());
+      $('statsYearPick').value = y;
+      const r = yearReviews.find((x) => x.year === y);
+      $('btnStatsYearDelete').classList.toggle('hidden', !r);
+      $('btnStatsYearSave').textContent = r ? '保存修改' : '提交年总结';
+      if (y !== lastStatsYearY) {
+        $('statsYearContent').value = r ? r.content : '';
+        lastStatsYearY = y;
+      }
+      const has = !!(r && String(r.content || '').trim());
+      $('statsYearReviewPreview').textContent = has ? previewClip(r.content, 220) : '';
+    }
+
+    function renderModulePieAndTable() {
+      const mode = $('pieGranularity').value;
+      const monthYm = ($('pieMonthPick').value || '').slice(0, 7);
+      const yearY = String(Math.floor(Number($('pieYearPick').value)) || new Date().getFullYear());
+      const slice = tasksInPieRange(tasks, mode, monthYm, yearY);
+      const rows = aggregateByCategory(slice);
+
+      const tbody = $('moduleBreakdownBody');
+      const emptyEl = $('moduleBreakdownEmpty');
+      tbody.innerHTML = '';
+      if (!rows.length) {
+        emptyEl.classList.remove('hidden');
+        if (chartMod) {
+          chartMod.destroy();
+          chartMod = null;
+        }
+        return;
+      }
+      emptyEl.classList.add('hidden');
+
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        tr.className = 'text-slate-700';
+        tr.innerHTML = `<td class="px-3 py-2 font-medium">${row.name}</td>
+          <td class="px-3 py-2 text-right tabular-nums">${row.total}</td>
+          <td class="px-3 py-2 text-right tabular-nums text-emerald-700">${row.done}</td>
+          <td class="px-3 py-2 text-right tabular-nums">${row.rate}%</td>
+          <td class="px-3 py-2 text-right tabular-nums">${row.minutes}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      const labels = rows.map((r) => `${r.name} (${r.rate}%)`);
+      const data = rows.map((r) => r.total);
+      const colors = rows.map((_, idx) => macaronColorAt(idx));
+
+      if (chartMod) chartMod.destroy();
+      chartMod = new Chart($('chartModulePie'), {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: colors, borderColor: '#ffffff', borderWidth: 2 }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '55%',
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  const row = rows[ctx.dataIndex];
+                  if (!row) return '';
+                  return ` ${row.done}/${row.total} 已完成 · 计划 ${row.minutes} 分钟`;
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function syncPieGranularityUI() {
+      const monthMode = $('pieGranularity').value === 'month';
+      $('pieMonthWrap').classList.toggle('hidden', !monthMode);
+      $('pieYearWrap').classList.toggle('hidden', monthMode);
+    }
+
+    (async () => {
+      $('userChip').textContent = `用户：${auth?.user?.username || authUserId()}`;
+
+      try {
+        const [taskRows, habitRows] = await Promise.all([api('/api/tasks'), api('/api/habits')]);
+        tasks = Array.isArray(taskRows) ? taskRows : [];
+        habits = Array.isArray(habitRows) ? habitRows : [];
+        await reloadReviewData();
+      } catch (e) {
+        alert(e.message || '加载数据失败');
+        return;
+      }
+
+      const now = new Date();
+      const todayKey = fmtDate(now);
+      const mon = mondayOf(now);
+      const weekStart = fmtDate(mon);
+      const weekEnd = fmtDate(addDays(mon, 6));
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const monthPrefix = `${y}-${String(m).padStart(2, '0')}`;
+      const firstMonthDay = `${monthPrefix}-01`;
+      const monthLast = fmtDate(new Date(y, now.getMonth() + 1, 0));
+
+      $('statsMonthPick').value = monthPrefix;
+      $('statsYearPick').value = String(y);
+      $('pieMonthPick').value = monthPrefix;
+      $('pieYearPick').value = String(y);
+
+      const tasksToday = tasks.filter((t) => t.date === todayKey);
+      const tasksWeek = tasks.filter((t) => t.date >= weekStart && t.date <= weekEnd);
+      const tasksMonth = tasks.filter((t) => String(t.date || '').startsWith(monthPrefix));
+
+      function stat(list) {
+        const total = list.length;
+        const done = list.filter((t) => t.completed).length;
+        const rate = total ? Math.round((done / total) * 1000) / 10 : null;
+        const plannedMin = list.reduce((s, t) => s + (Number(t.duration) || 0), 0);
+        return { total, done, rate, plannedMin };
+      }
+
+      const dS = stat(tasksToday);
+      const wS = stat(tasksWeek);
+      const mS = stat(tasksMonth);
+
+      $('dayDateLabel').textContent = formatDateZh(todayKey);
+      $('dayRate').textContent = formatRate(dS.rate);
+      $('dayTasks').innerHTML = completionLine(dS.total, dS.done);
+      $('dayPlanMin').innerHTML = planLine(dS.plannedMin);
+
+      $('weekRangeLabel').textContent = `${formatDateZh(weekStart)} ～ ${formatDateZh(weekEnd)}`;
+      $('weekRate').textContent = formatRate(wS.rate);
+      $('weekTasks').innerHTML = completionLine(wS.total, wS.done);
+      $('weekPlanMin').innerHTML = planLine(wS.plannedMin);
+
+      $('monthLabel').textContent = `${y} 年 ${m} 月`;
+      $('monthRate').textContent = formatRate(mS.rate);
+      $('monthTasks').innerHTML = completionLine(mS.total, mS.done);
+      $('monthPlanMin').innerHTML = planLine(mS.plannedMin);
+
+      const habitCount = habits.length;
+      let logsToday = [];
+      let logsWeek = [];
+      let logsMonth = [];
+      try {
+        [logsToday, logsWeek, logsMonth] = await Promise.all([
+          api(`/api/habit-logs-range?from=${encodeURIComponent(todayKey)}&to=${encodeURIComponent(todayKey)}`),
+          api(`/api/habit-logs-range?from=${encodeURIComponent(weekStart)}&to=${encodeURIComponent(weekEnd)}`),
+          api(`/api/habit-logs-range?from=${encodeURIComponent(firstMonthDay)}&to=${encodeURIComponent(monthLast)}`),
+        ]);
+      } catch (e) {
+        console.warn('[habits stats]', e.message || e);
+      }
+      const doneHToday = (Array.isArray(logsToday) ? logsToday : []).filter((x) => x.completed).length;
+      const rateHD = habitCount ? Math.round((doneHToday / habitCount) * 1000) / 10 : null;
+      $('habitDayRate').textContent = formatRate(rateHD);
+      $('habitDayDetail').textContent = habitCount
+        ? `今日已勾选 ${doneHToday} / ${habitCount} 项。`
+        : '尚未添加学习习惯；请在计划页「每日习惯」中添加。';
+
+      const doneHWeek = (Array.isArray(logsWeek) ? logsWeek : []).filter((x) => x.completed).length;
+      const capHW = habitCount * 7;
+      const rateHW = capHW ? Math.round((doneHWeek / capHW) * 1000) / 10 : null;
+      $('habitWeekRate').textContent = formatRate(rateHW);
+      $('habitWeekDetail').textContent = habitCount
+        ? `本周打卡 ${doneHWeek} 条 / 上限 ${capHW} 条（习惯×7）。`
+        : '尚无习惯条目。';
+
+      const dim = new Date(y, now.getMonth() + 1, 0).getDate();
+      const doneHMonth = (Array.isArray(logsMonth) ? logsMonth : []).filter((x) => x.completed).length;
+      const capHM = habitCount * dim;
+      const rateHM = capHM ? Math.round((doneHMonth / capHM) * 1000) / 10 : null;
+      $('habitMonthRate').textContent = formatRate(rateHM);
+      $('habitMonthDetail').textContent = habitCount
+        ? `本月打卡 ${doneHMonth} 条 / 上限 ${capHM} 条（习惯×${dim}）。`
+        : '尚无习惯条目。';
+
+      lastStatsMonthYm = '';
+      lastStatsYearY = '';
+      fillStatsMonthEditor();
+      fillStatsYearEditor();
+
+      const monthHas = monthReviews.some((x) => x.month === monthPrefix && String(x.content || '').trim());
+      const yearHas = yearReviews.some((x) => x.year === String(y) && String(x.content || '').trim());
+      setStatsMonthCollapsed(!!monthHas);
+      setStatsYearCollapsed(!!yearHas);
+
+      $('btnToggleStatsMonthReview').onclick = () => setStatsMonthCollapsed(!statsMonthCollapsed);
+      $('btnToggleStatsYearReview').onclick = () => setStatsYearCollapsed(!statsYearCollapsed);
+
+      $('statsMonthPick').onchange = () => {
+        lastStatsMonthYm = '';
+        fillStatsMonthEditor();
+      };
+      $('statsYearPick').onchange = () => {
+        lastStatsYearY = '';
+        fillStatsYearEditor();
+      };
+
+      $('btnStatsMonthSave').onclick = async () => {
+        const month = ($('statsMonthPick').value || '').slice(0, 7);
+        const content = $('statsMonthContent').value.trim();
+        if (!/^\d{4}-\d{2}$/.test(month)) {
+          alert('请选择有效月份。');
+          return;
+        }
+        if (!content) {
+          alert('请填写月总结内容。');
+          return;
+        }
+        try {
+          await api('/api/month-reviews', { method: 'POST', body: JSON.stringify({ month, content }) });
+          await reloadReviewData();
+          lastStatsMonthYm = '';
+          fillStatsMonthEditor();
+          setStatsMonthCollapsed(true);
+        } catch (err) {
+          alert(err.message || '保存失败');
+        }
+      };
+
+      $('btnStatsMonthDelete').onclick = async () => {
+        const ym = ($('statsMonthPick').value || '').slice(0, 7);
+        const r = monthReviews.find((x) => x.month === ym);
+        if (!r || !confirm('确定删除该月的月总结？')) return;
+        try {
+          await api(`/api/month-reviews/${r.id}`, { method: 'DELETE' });
+          await reloadReviewData();
+          lastStatsMonthYm = '';
+          fillStatsMonthEditor();
+          setStatsMonthCollapsed(false);
+        } catch (err) {
+          alert(err.message || '删除失败');
+        }
+      };
+
+      $('btnStatsYearSave').onclick = async () => {
+        const year = String(Math.floor(Number($('statsYearPick').value)) || new Date().getFullYear());
+        const content = $('statsYearContent').value.trim();
+        if (!/^\d{4}$/.test(year)) {
+          alert('请填写合法年份。');
+          return;
+        }
+        if (!content) {
+          alert('请填写年总结内容。');
+          return;
+        }
+        try {
+          await api('/api/year-reviews', { method: 'POST', body: JSON.stringify({ year, content }) });
+          await reloadReviewData();
+          lastStatsYearY = '';
+          fillStatsYearEditor();
+          setStatsYearCollapsed(true);
+        } catch (err) {
+          alert(err.message || '保存失败');
+        }
+      };
+
+      $('btnStatsYearDelete').onclick = async () => {
+        const y = String(Math.floor(Number($('statsYearPick').value)) || new Date().getFullYear());
+        const r = yearReviews.find((x) => x.year === y);
+        if (!r || !confirm('确定删除该年的年总结？')) return;
+        try {
+          await api(`/api/year-reviews/${r.id}`, { method: 'DELETE' });
+          await reloadReviewData();
+          lastStatsYearY = '';
+          fillStatsYearEditor();
+          setStatsYearCollapsed(false);
+        } catch (err) {
+          alert(err.message || '删除失败');
+        }
+      };
+
+      $('pieGranularity').onchange = () => {
+        syncPieGranularityUI();
+        renderModulePieAndTable();
+      };
+      $('pieMonthPick').onchange = () => renderModulePieAndTable();
+      $('pieYearPick').onchange = () => renderModulePieAndTable();
+      syncPieGranularityUI();
+      renderModulePieAndTable();
+
+      const fromPomo = [weekStart, firstMonthDay, fmtDate(addDays(now, -13))].sort()[0];
+      let pomoMap = Object.create(null);
+      try {
+        pomoMap = await fetchPomoDailyMap(fromPomo, todayKey);
+      } catch (e) {
+        console.warn('[pomo load]', e.message || e);
+      }
+      $('pomoDayMin').textContent = String(pomoMinutesOnDay(pomoMap, todayKey));
+      $('pomoWeekMin').textContent = String(pomoMinutesInRange(pomoMap, weekStart, weekEnd));
+      $('pomoMonthMin').textContent = String(pomoMinutesForMonthFromMap(pomoMap, y, m));
+
+      const labels14 = [];
+      const pomoVals = [];
+      const planVals = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = addDays(now, -i);
+        const key = fmtDate(d);
+        labels14.push(`${d.getMonth() + 1}/${d.getDate()}`);
+        pomoVals.push(pomoMinutesOnDay(pomoMap, key));
+        const dayTasks = tasks.filter((t) => t.date === key);
+        planVals.push(dayTasks.reduce((s, t) => s + (Number(t.duration) || 0), 0));
+      }
+
+      if (chartPomo) chartPomo.destroy();
+      chartPomo = new Chart($('chartPomo14'), {
+        type: 'bar',
+        data: {
+          labels: labels14,
+          datasets: [
+            {
+              label: '专注分钟',
+              data: pomoVals,
+              backgroundColor: 'rgba(245, 158, 11, 0.75)',
+              borderRadius: 6,
+              borderSkipped: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,.2)' } },
+            x: { grid: { display: false } },
+          },
+          plugins: { legend: { display: false } },
+        },
+      });
+
+      if (chartPlan) chartPlan.destroy();
+      chartPlan = new Chart($('chartPlan14'), {
+        type: 'bar',
+        data: {
+          labels: labels14,
+          datasets: [
+            {
+              label: '计划分钟',
+              data: planVals,
+              backgroundColor: 'rgba(14, 165, 233, 0.65)',
+              borderRadius: 6,
+              borderSkipped: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,.2)' } },
+            x: { grid: { display: false } },
+          },
+          plugins: { legend: { display: false } },
+        },
+      });
+
+      const from14 = fmtDate(addDays(now, -13));
+      let habitLogs14 = [];
+      try {
+        habitLogs14 = await api(
+          `/api/habit-logs-range?from=${encodeURIComponent(from14)}&to=${encodeURIComponent(todayKey)}`
+        );
+      } catch (e) {
+        console.warn('[habit14]', e.message || e);
+      }
+      const habitTickPerDay = Object.create(null);
+      (Array.isArray(habitLogs14) ? habitLogs14 : []).forEach((r) => {
+        if (!r.completed) return;
+        const dk = String(r.date || '').slice(0, 10);
+        habitTickPerDay[dk] = (habitTickPerDay[dk] || 0) + 1;
+      });
+      const habitVals14 = [];
+      for (let j = 13; j >= 0; j--) {
+        const key14 = fmtDate(addDays(now, -j));
+        habitVals14.push(habitTickPerDay[key14] || 0);
+      }
+
+      if (chartHabitPomo) chartHabitPomo.destroy();
+      chartHabitPomo = new Chart($('chartHabitPomo14'), {
+        type: 'bar',
+        data: {
+          labels: labels14,
+          datasets: [
+            {
+              label: '习惯打卡次数',
+              data: habitVals14,
+              backgroundColor: 'rgba(249, 115, 22, 0.78)',
+              borderRadius: 6,
+              borderSkipped: false,
+            },
+            {
+              label: '专注分钟',
+              data: pomoVals,
+              backgroundColor: 'rgba(14, 165, 233, 0.65)',
+              borderRadius: 6,
+              borderSkipped: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,.2)' } },
+            x: { grid: { display: false } },
+          },
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+          },
+        },
+      });
+    })();
+  })();
+  </script>
+</body>
+</html>

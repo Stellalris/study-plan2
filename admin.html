@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后台管理 · Study Plan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-fuchsia-50 via-white to-indigo-50 font-sans text-slate-800">
+  <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-fuchsia-700">Admin Console</p>
+        <h1 class="text-2xl font-bold text-slate-900">后台管理</h1>
+        <p class="mt-1 text-sm text-slate-600">查看全体用户学习时长、任务完成率与每日趋势。</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="adminUserChip" class="rounded-lg border border-white/80 bg-white px-3 py-2 text-xs font-medium text-slate-600"></span>
+        <a href="plan.html" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">返回计划页</a>
+        <button id="btnAdminLogout" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100">退出登录</button>
+      </div>
+    </header>
+
+    <section class="mb-6 rounded-2xl border border-white/70 bg-white/80 p-4 shadow">
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="text-xs text-slate-600">开始日期
+          <input id="fromDate" type="date" class="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-fuchsia-300 focus:ring-2 focus:ring-fuchsia-100" />
+        </label>
+        <label class="text-xs text-slate-600">结束日期
+          <input id="toDate" type="date" class="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-fuchsia-300 focus:ring-2 focus:ring-fuchsia-100" />
+        </label>
+        <button id="btnReloadOverview" type="button" class="rounded-lg bg-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-fuchsia-700 disabled:cursor-not-allowed disabled:opacity-60">刷新统计</button>
+        <button id="btnExportCsv" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">导出 CSV</button>
+      </div>
+      <p class="mt-1 text-xs text-amber-800/90">单次查询区间最长 <strong>90 天</strong>（含起止日）。</p>
+      <p id="adminHint" class="mt-2 text-xs text-slate-500"></p>
+    </section>
+
+    <section class="grid gap-6 lg:grid-cols-12">
+      <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow lg:col-span-7">
+        <h2 class="mb-3 text-base font-semibold text-slate-900">用户总览</h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-3 py-2 text-left">用户</th>
+                <th class="px-3 py-2 text-right">任务完成</th>
+                <th
+                  data-sort="completionRate"
+                  data-sort-label="完成率"
+                  title="区间内任务完成率，点击切换升序/降序"
+                  class="sort-th cursor-pointer select-none px-3 py-2 text-right hover:text-fuchsia-700"
+                >
+                  完成率
+                </th>
+                <th
+                  data-sort="habitReview"
+                  data-sort-label="习惯/复盘"
+                  title="习惯打卡次数 / 有内容的复盘天数，点击按打卡优先、其次复盘排序"
+                  class="sort-th cursor-pointer select-none px-3 py-2 text-right hover:text-fuchsia-700"
+                >
+                  习惯/复盘
+                </th>
+                <th
+                  data-sort="taskMinutes"
+                  data-sort-label="任务时长(分)"
+                  title="区间内任务计划时长合计（分钟），点击排序"
+                  class="sort-th cursor-pointer select-none px-3 py-2 text-right hover:text-fuchsia-700"
+                >
+                  任务时长(分)
+                </th>
+                <th
+                  data-sort="pomoSeconds"
+                  data-sort-label="专注时长(分)"
+                  title="区间内番茄专注秒数换算为分钟，点击排序"
+                  class="sort-th cursor-pointer select-none px-3 py-2 text-right hover:text-fuchsia-700"
+                >
+                  专注时长(分)
+                </th>
+              </tr>
+            </thead>
+            <tbody id="overviewTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow lg:col-span-5">
+        <h2 class="mb-2 text-base font-semibold text-slate-900">用户每日趋势</h2>
+        <p id="selectedUserHint" class="mb-3 text-xs text-slate-500">点击左侧用户查看详情</p>
+        <div class="relative h-72">
+          <canvas id="userTrendChart"></canvas>
+          <div
+            id="userTrendEmpty"
+            class="pointer-events-none absolute inset-0 hidden items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/90 px-3 text-center text-xs leading-relaxed text-slate-600"
+          >
+            区间内几乎无数据（该用户任务时长与专注时长均为 0）。
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app-config.js"></script>
+  <script>
+    (() => {
+      const AUTH_KEY = 'study-plan-auth';
+      const SUPABASE_URL = String(window.APP_CONFIG?.SUPABASE_URL || '').trim().replace(/\/$/, '');
+      const SUPABASE_ANON_KEY = String(window.APP_CONFIG?.SUPABASE_ANON_KEY || '').trim();
+      if (!/^https?:\/\//i.test(SUPABASE_URL) || !SUPABASE_ANON_KEY) {
+        alert('请先在 app-config.js 中配置 SUPABASE_URL 与 SUPABASE_ANON_KEY');
+        return;
+      }
+      const nativeAlert = window.alert.bind(window);
+      window.alert = (msg) => nativeAlert(`(๑•̀ㅂ•́)و✧ ${String(msg ?? '')}`);
+      const auth = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+      if (!auth?.token || !auth?.user?.id) {
+        location.replace('login1.html');
+        return;
+      }
+      const $ = (id) => document.getElementById(id);
+      const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const now = new Date();
+      const fromDefault = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+      $('fromDate').value = fmtDate(fromDefault);
+      $('toDate').value = fmtDate(now);
+      $('adminUserChip').textContent = `${auth.user.username}（${auth.user.role || 'user'}）`;
+      let trendChart = null;
+      let currentRows = [];
+      /** @type {{ key: string, dir: 1|-1 }} key: userId | completionRate | habitReview | taskMinutes | pomoSeconds */
+      let sortState = { key: 'userId', dir: 1 };
+
+      const SORT_HEADER_LABELS = {
+        completionRate: '完成率',
+        habitReview: '习惯/复盘',
+        taskMinutes: '任务时长(分)',
+        pomoSeconds: '专注时长(分)',
+      };
+
+      function updateSortHeaders() {
+        document.querySelectorAll('th.sort-th[data-sort]').forEach((th) => {
+          const key = th.getAttribute('data-sort');
+          const base = th.getAttribute('data-sort-label') || SORT_HEADER_LABELS[key] || key;
+          if (sortState.key === key) {
+            th.textContent = `${base} ${sortState.dir === 1 ? '↑' : '↓'}`;
+            th.setAttribute('aria-sort', sortState.dir === 1 ? 'ascending' : 'descending');
+          } else {
+            th.textContent = base;
+            th.removeAttribute('aria-sort');
+          }
+        });
+      }
+      let selectedUserRow = null;
+
+      function getAuthHeaders(extra = {}) {
+        return {
+          Accept: 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${auth.token}`,
+          ...extra,
+        };
+      }
+
+      async function sbRequest(pathAndQuery, init = {}) {
+        const method = String(init.method || 'GET').toUpperCase();
+        const headers = getAuthHeaders(method === 'GET' || method === 'HEAD' ? {} : { 'Content-Type': 'application/json' });
+        if (init.headers && typeof init.headers === 'object') Object.assign(headers, init.headers);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1${pathAndQuery}`, {
+          method,
+          headers,
+          body: method === 'GET' || method === 'HEAD' ? undefined : init.body,
+        });
+        const text = await res.text();
+        let data = null;
+        if (text) {
+          try { data = JSON.parse(text); } catch { data = { message: text }; }
+        }
+        if (!res.ok) {
+          const err = new Error(data?.message || `请求失败（HTTP ${res.status}）`);
+          err.httpStatus = res.status;
+          throw err;
+        }
+        return data;
+      }
+
+      function dateRangeKeys(from, to) {
+        const out = [];
+        const a = new Date(`${from}T12:00:00`);
+        const b = new Date(`${to}T12:00:00`);
+        for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) out.push(fmtDate(d));
+        return out;
+      }
+
+      async function apiGet(path) {
+        if (path === '/auth/me') {
+          const p = await sbRequest('/profiles?select=id,username,email,role&id=eq.' + encodeURIComponent(auth.user.id));
+          const me = Array.isArray(p) ? p[0] : null;
+          return { user: { ...auth.user, ...(me || {}) } };
+        }
+        const qIdx = path.indexOf('?');
+        const pathname = qIdx >= 0 ? path.slice(0, qIdx) : path;
+        const search = new URLSearchParams(qIdx >= 0 ? path.slice(qIdx + 1) : '');
+        const from = search.get('from');
+        const to = search.get('to');
+        if (!from || !to) throw new Error('缺少时间范围参数');
+
+        if (pathname === '/admin/users/overview') {
+          const [profiles, tasks, habits, reviews, pomos] = await Promise.all([
+            sbRequest('/profiles?select=id,username,email,role'),
+            sbRequest(`/tasks?select=user_id,date,completed,duration&date=gte.${encodeURIComponent(from)}&date=lte.${encodeURIComponent(to)}`),
+            sbRequest(`/habit_logs?select=user_id&log_date=gte.${encodeURIComponent(from)}&log_date=lte.${encodeURIComponent(to)}&completed=eq.true`),
+            sbRequest(`/daily_reviews?select=user_id,review_date&review_date=gte.${encodeURIComponent(from)}&review_date=lte.${encodeURIComponent(to)}`),
+            sbRequest(`/pomodoro_sessions?select=user_id,duration_sec,session_date&session_date=gte.${encodeURIComponent(from)}&session_date=lte.${encodeURIComponent(to)}`),
+          ]);
+          const byUser = new Map();
+          (Array.isArray(profiles) ? profiles : []).forEach((u) => {
+            byUser.set(String(u.id), {
+              userId: String(u.id),
+              username: u.username || u.email || String(u.id).slice(0, 8),
+              role: u.role || 'user',
+              taskDone: 0,
+              taskTotal: 0,
+              completionRate: 0,
+              habitTicks: 0,
+              reviewDays: 0,
+              taskMinutes: 0,
+              pomoSeconds: 0,
+            });
+          });
+          (Array.isArray(tasks) ? tasks : []).forEach((t) => {
+            const uid = String(t.user_id || '');
+            if (!uid) return;
+            if (!byUser.has(uid)) byUser.set(uid, { userId: uid, username: `用户${uid.slice(0, 8)}`, role: 'user', taskDone: 0, taskTotal: 0, completionRate: 0, habitTicks: 0, reviewDays: 0, taskMinutes: 0, pomoSeconds: 0 });
+            const row = byUser.get(uid);
+            row.taskTotal += 1;
+            if (t.completed) row.taskDone += 1;
+            row.taskMinutes += Number(t.duration) || 0;
+          });
+          (Array.isArray(habits) ? habits : []).forEach((h) => {
+            const uid = String(h.user_id || '');
+            const row = byUser.get(uid);
+            if (row) row.habitTicks += 1;
+          });
+          const reviewSet = new Set();
+          (Array.isArray(reviews) ? reviews : []).forEach((r) => {
+            const uid = String(r.user_id || '');
+            const day = String(r.review_date || '').slice(0, 10);
+            if (uid && day) reviewSet.add(`${uid}|${day}`);
+          });
+          reviewSet.forEach((k) => {
+            const uid = k.split('|')[0];
+            const row = byUser.get(uid);
+            if (row) row.reviewDays += 1;
+          });
+          (Array.isArray(pomos) ? pomos : []).forEach((p) => {
+            const uid = String(p.user_id || '');
+            const row = byUser.get(uid);
+            if (row) row.pomoSeconds += Number(p.duration_sec) || 0;
+          });
+          byUser.forEach((r) => {
+            r.completionRate = r.taskTotal ? Math.round((r.taskDone * 1000) / r.taskTotal) / 10 : 0;
+          });
+          return Array.from(byUser.values());
+        }
+
+        const m = pathname.match(/^\/admin\/users\/([^/]+)\/daily$/);
+        if (m) {
+          const userId = decodeURIComponent(m[1]);
+          const [tasks, pomos] = await Promise.all([
+            sbRequest(`/tasks?select=date,duration&user_id=eq.${encodeURIComponent(userId)}&date=gte.${encodeURIComponent(from)}&date=lte.${encodeURIComponent(to)}`),
+            sbRequest(`/pomodoro_sessions?select=session_date,duration_sec&user_id=eq.${encodeURIComponent(userId)}&session_date=gte.${encodeURIComponent(from)}&session_date=lte.${encodeURIComponent(to)}`),
+          ]);
+          const map = new Map();
+          dateRangeKeys(from, to).forEach((d) => map.set(d, { date: d, taskMinutes: 0, pomoSeconds: 0 }));
+          (Array.isArray(tasks) ? tasks : []).forEach((t) => {
+            const d = String(t.date || '').slice(0, 10);
+            const row = map.get(d);
+            if (row) row.taskMinutes += Number(t.duration) || 0;
+          });
+          (Array.isArray(pomos) ? pomos : []).forEach((p) => {
+            const d = String(p.session_date || '').slice(0, 10);
+            const row = map.get(d);
+            if (row) row.pomoSeconds += Number(p.duration_sec) || 0;
+          });
+          return Array.from(map.values());
+        }
+        throw new Error(`不支持的接口：${path}`);
+      }
+
+      function queryRange() {
+        return `from=${encodeURIComponent($('fromDate').value)}&to=${encodeURIComponent($('toDate').value)}`;
+      }
+
+      function validateDateRange() {
+        const f = String($('fromDate').value || '').trim();
+        const t = String($('toDate').value || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || !/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+          return { ok: false, message: '请选择合法的开始与结束日期。' };
+        }
+        if (f > t) return { ok: false, message: '开始日期不能晚于结束日期。' };
+        const spanDays =
+          Math.floor((new Date(`${t}T12:00:00`).getTime() - new Date(`${f}T12:00:00`).getTime()) / 86400000) + 1;
+        if (spanDays > 90) return { ok: false, message: '单次查询区间不能超过 90 天（含起止日），请缩小范围。' };
+        return { ok: true };
+      }
+
+      function setAdminLoading(loading) {
+        const b1 = $('btnReloadOverview');
+        const b2 = $('btnExportCsv');
+        if (b1) {
+          b1.disabled = !!loading;
+          b1.textContent = loading ? '加载中…' : '刷新统计';
+        }
+        if (b2) b2.disabled = !!loading;
+      }
+
+      function sortRows(rows) {
+        const { key, dir } = sortState;
+        const copy = Array.isArray(rows) ? [...rows] : [];
+        const num = (v) => Number(v) || 0;
+        /** 习惯优先、复盘次之（同一条接口里的 habitTicks + reviewDays） */
+        const habitReviewKey = (r) => num(r.habitTicks) * 1e9 + num(r.reviewDays);
+        copy.sort((a, b) => {
+          let va;
+          let vb;
+          switch (key) {
+            case 'completionRate':
+              va = num(a.completionRate);
+              vb = num(b.completionRate);
+              break;
+            case 'habitReview':
+              va = habitReviewKey(a);
+              vb = habitReviewKey(b);
+              break;
+            case 'taskMinutes':
+              va = num(a.taskMinutes);
+              vb = num(b.taskMinutes);
+              break;
+            case 'pomoSeconds':
+              va = num(a.pomoSeconds);
+              vb = num(b.pomoSeconds);
+              break;
+            default:
+              va = num(a.userId);
+              vb = num(b.userId);
+          }
+          if (va < vb) return -dir;
+          if (va > vb) return dir;
+          return String(a.username || '').localeCompare(String(b.username || '')) * dir;
+        });
+        return copy;
+      }
+
+      function escapeCsvCell(v) {
+        const s = String(v ?? '');
+        if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      }
+
+      function exportOverviewCsv() {
+        const rows = sortRows(currentRows);
+        if (!rows.length) {
+          alert('暂无数据可导出。');
+          return;
+        }
+        const headers = [
+          'userId',
+          'username',
+          'role',
+          'taskDone',
+          'taskTotal',
+          'completionRate',
+          'habitTicks',
+          'reviewDays',
+          'taskMinutes',
+          'pomoMinutes',
+        ];
+        const lines = [headers.join(',')];
+        rows.forEach((r) => {
+          lines.push(
+            [
+              escapeCsvCell(r.userId),
+              escapeCsvCell(r.username),
+              escapeCsvCell(r.role),
+              escapeCsvCell(r.taskDone),
+              escapeCsvCell(r.taskTotal),
+              escapeCsvCell(r.completionRate),
+              escapeCsvCell(r.habitTicks ?? 0),
+              escapeCsvCell(r.reviewDays ?? 0),
+              escapeCsvCell(r.taskMinutes),
+              escapeCsvCell(Math.round((Number(r.pomoSeconds) || 0) / 60)),
+            ].join(',')
+          );
+        });
+        const blob = new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const fd = String($('fromDate').value || '').replace(/-/g, '');
+        const td = String($('toDate').value || '').replace(/-/g, '');
+        a.href = url;
+        a.download = `admin-overview-${fd}-${td}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function renderOverview() {
+        updateSortHeaders();
+        const tbody = $('overviewTbody');
+        const rows = sortRows(currentRows);
+        tbody.innerHTML = '';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-slate-400">暂无数据</td></tr>';
+          return;
+        }
+        rows.forEach((r) => {
+          const tr = document.createElement('tr');
+          tr.className = 'cursor-pointer border-b border-slate-100 hover:bg-fuchsia-50/60';
+          const sel =
+            selectedUserRow && String(selectedUserRow.userId) === String(r.userId) ? ' bg-fuchsia-50/90 ring-1 ring-fuchsia-200' : '';
+          tr.className += sel;
+          const ht = Number(r.habitTicks) || 0;
+          const rd = Number(r.reviewDays) || 0;
+          tr.innerHTML = `<td class="px-3 py-2"><div class="font-medium text-slate-800">${r.username}</div><div class="text-xs text-slate-500">ID ${r.userId} · ${r.role}</div></td>
+            <td class="px-3 py-2 text-right tabular-nums">${r.taskDone}/${r.taskTotal}</td>
+            <td class="px-3 py-2 text-right tabular-nums">${r.completionRate}%</td>
+            <td class="px-3 py-2 text-right tabular-nums" title="习惯打卡次数 / 复盘天数">${ht} / ${rd}</td>
+            <td class="px-3 py-2 text-right tabular-nums">${r.taskMinutes}</td>
+            <td class="px-3 py-2 text-right tabular-nums">${Math.round((r.pomoSeconds || 0) / 60)}</td>`;
+          tr.onclick = () => loadUserDaily(r);
+          tbody.appendChild(tr);
+        });
+      }
+
+      async function loadOverview() {
+        const vr = validateDateRange();
+        if (!vr.ok) {
+          alert(vr.message);
+          return;
+        }
+        setAdminLoading(true);
+        try {
+          const rows = await apiGet(`/admin/users/overview?${queryRange()}`);
+          currentRows = Array.isArray(rows) ? rows : [];
+          renderOverview();
+          const totalUsers = currentRows.length;
+          const totalTaskMinutes = currentRows.reduce((s, x) => s + (Number(x.taskMinutes) || 0), 0);
+          const totalPomoMinutes = currentRows.reduce((s, x) => s + Math.round((Number(x.pomoSeconds) || 0) / 60), 0);
+          const totalHabits = currentRows.reduce((s, x) => s + (Number(x.habitTicks) || 0), 0);
+          const totalReviews = currentRows.reduce((s, x) => s + (Number(x.reviewDays) || 0), 0);
+          $('adminHint').textContent = `区间内共 ${totalUsers} 位用户；任务时长 ${totalTaskMinutes} 分钟，专注 ${totalPomoMinutes} 分钟；习惯打卡 ${totalHabits} 次，复盘天数合计 ${totalReviews} 天。`;
+        } finally {
+          setAdminLoading(false);
+        }
+      }
+
+      function setTrendEmptyVisible(show) {
+        const empty = $('userTrendEmpty');
+        const canvas = $('userTrendChart');
+        if (empty) {
+          empty.classList.toggle('hidden', !show);
+          empty.classList.toggle('flex', !!show);
+        }
+        if (canvas) canvas.classList.toggle('hidden', !!show);
+      }
+
+      async function loadUserDaily(userRow) {
+        const vr = validateDateRange();
+        if (!vr.ok) {
+          alert(vr.message);
+          return;
+        }
+        selectedUserRow = userRow;
+        renderOverview();
+        const arr = await apiGet(`/admin/users/${encodeURIComponent(userRow.userId)}/daily?${queryRange()}`);
+        const rows = Array.isArray(arr) ? arr : [];
+        $('selectedUserHint').textContent = `当前：${userRow.username}（${rows.length} 天）`;
+        const labels = rows.map((x) => x.date.slice(5));
+        const taskMinutes = rows.map((x) => Number(x.taskMinutes) || 0);
+        const pomoMinutes = rows.map((x) => Math.round((Number(x.pomoSeconds) || 0) / 60));
+        const maxVal = Math.max(0, ...taskMinutes, ...pomoMinutes);
+        if (trendChart) {
+          trendChart.destroy();
+          trendChart = null;
+        }
+        if (maxVal === 0) {
+          setTrendEmptyVisible(true);
+          return;
+        }
+        setTrendEmptyVisible(false);
+        const suggestedMax = Math.max(5, Math.ceil(maxVal * 1.12));
+        trendChart = new Chart($('userTrendChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: '任务时长(分)', data: taskMinutes, borderColor: 'rgba(217,70,239,0.9)', backgroundColor: 'rgba(217,70,239,0.15)', tension: 0.25, fill: true },
+              { label: '专注时长(分)', data: pomoMinutes, borderColor: 'rgba(14,165,233,0.9)', backgroundColor: 'rgba(14,165,233,0.15)', tension: 0.25, fill: true },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+              y: {
+                beginAtZero: true,
+                suggestedMax,
+                ticks: { precision: 0 },
+              },
+            },
+          },
+        });
+      }
+
+      async function ensureAdmin() {
+        try {
+          const me = await apiGet('/auth/me');
+          if (String(me?.user?.role || 'user') !== 'admin') {
+            alert('你不是管理员账号，无法访问后台。');
+            location.replace('plan.html');
+            return false;
+          }
+          auth.user = me.user;
+          localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+          $('adminUserChip').textContent = `${auth.user.username}（${auth.user.role || 'user'}）`;
+          return true;
+        } catch (e) {
+          localStorage.removeItem(AUTH_KEY);
+          alert(e.message || '登录状态失效，请重新登录');
+          location.replace('login1.html');
+          return false;
+        }
+      }
+
+      $('btnReloadOverview').onclick = async () => {
+        try {
+          await loadOverview();
+          const uid = selectedUserRow && selectedUserRow.userId;
+          const match = uid ? currentRows.find((x) => String(x.userId) === String(uid)) : null;
+          const pick = match || sortRows(currentRows)[0];
+          if (pick) await loadUserDaily(pick);
+        } catch (e) {
+          alert(e.message || '加载失败');
+        }
+      };
+      $('btnExportCsv').onclick = () => exportOverviewCsv();
+      document.querySelectorAll('.sort-th').forEach((th) => {
+        th.addEventListener('click', () => {
+          const key = th.getAttribute('data-sort');
+          if (!key) return;
+          if (sortState.key === key) sortState.dir = sortState.dir === 1 ? -1 : 1;
+          else {
+            sortState.key = key;
+            sortState.dir = -1;
+          }
+          renderOverview();
+        });
+      });
+      $('btnAdminLogout').onclick = () => {
+        localStorage.removeItem(AUTH_KEY);
+        location.replace('login1.html');
+      };
+
+      (async () => {
+        if (!(await ensureAdmin())) return;
+        try {
+          await loadOverview();
+          const first = sortRows(currentRows)[0];
+          if (first) {
+            selectedUserRow = first;
+            await loadUserDaily(first);
+          }
+        } catch (e) {
+          alert(e.message || '加载后台数据失败');
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>
