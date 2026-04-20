@@ -1,6 +1,6 @@
 window.APP_CONFIG = {
   // Supabase 控制台 -> Settings -> API -> Project URL
-  SUPABASE_URL: "https://YOUR_PROJECT_REF.supabase.co",
+  SUPABASE_URL: "https://irctdrietcvpqgazsjwx.supabase.co",
   // Supabase 控制台 -> Settings -> API -> anon public key
-  SUPABASE_ANON_KEY: "YOUR_SUPABASE_ANON_KEY",
+  SUPABASE_ANON_KEY: "sb_publishable_xJbIk7-5N4iubEcBbc1x-g_AsB4jQQZ",
 };
