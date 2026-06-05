@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的日记 · Study Plan</title>
+  <script src="auth-helper.js"></script>
+  <script>
+    (async function () {
+      try {
+        var auth = await AuthHelper.ensureSession();
+        if (!auth) {
+          location.replace('login1.html');
+        }
+      } catch (e) {
+        location.replace('login1.html');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body class="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 font-sans text-slate-800 antialiased">
+  <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 class="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          <i class="fa-solid fa-book-journal-whills mr-2 text-brand-600"></i>我的日记
+        </h1>
+        <p class="mt-2 max-w-2xl text-sm text-slate-600">
+          点击<strong class="text-slate-800">日记本卡片</strong>后，对话区仅显示该本日记；支持<strong class="text-slate-800">对话式书写</strong>、气泡弹窗编辑、标签与删除。未选日记本时可查看与日历同步的<strong class="text-slate-800">每日复盘</strong>摘要。
+        </p>
+      </div>
+      <span id="userChip" class="self-start rounded-lg border border-white/80 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600"></span>
+    </header>
+
+    <!-- 日记本：多列小方格卡片 -->
+    <section class="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-lg shadow-violet-100/40 sm:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="text-xs text-slate-400">一共有 <span id="totalEntryCount" class="font-medium text-slate-600">0</span> 条记录</p>
+        <!-- 日记本排序 -->
+        <div class="flex items-center gap-2">
+          <label for="notebookSort" class="text-xs text-slate-400">排序</label>
+          <select id="notebookSort" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none focus:border-brand-400">
+            <option value="created_at">创建时间</option>
+            <option value="updated_at">更新时间</option>
+            <option value="name">名称</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <input
+          id="newNotebookName"
+          type="text"
+          maxlength="200"
+          placeholder="新日记本名称"
+          class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-violet-100 sm:max-w-xs"
+        />
+        <button id="btnCreateNotebook" type="button" class="shrink-0 rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">创建</button>
+      </div>
+      <div id="notebookGrid" class="mx-auto mt-4 grid max-w-md grid-cols-4 gap-2 gap-y-3 sm:max-w-xl sm:grid-cols-5 sm:gap-2.5 md:max-w-2xl md:grid-cols-6 md:gap-3 lg:max-w-3xl lg:grid-cols-7"></div>
+      <p id="notebookEmpty" class="mt-6 hidden text-center text-xs text-slate-400">暂无日记本，请先创建</p>
+    </section>
+
+    <!-- 左侧：对话式写日记 + 右侧竖排标签 -->
+    <div class="mt-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+      <div class="min-w-0 flex-1 space-y-4">
+        <section class="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-lg shadow-violet-100/40 sm:p-5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="font-display text-sm font-semibold text-slate-900">
+              <i class="fa-solid fa-comments mr-2 text-brand-500"></i>对话式写日记
+            </h2>
+            <button
+              id="btnClearNotebookFilter"
+              type="button"
+              class="hidden rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            >
+              返回每日复盘摘要
+            </button>
+          </div>
+          <p id="chatHint" class="mt-2 text-xs text-slate-500"></p>
+
+          <!-- 搜索栏 -->
+          <div id="searchSection" class="mt-3 hidden flex items-center gap-2">
+            <div class="relative flex-1">
+              <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+              <input
+                id="searchInput"
+                type="text"
+                placeholder="搜索日记内容…"
+                class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-8 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-violet-100"
+              />
+            </div>
+            <button
+              id="btnClearSearch"
+              type="button"
+              class="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            >
+              清除
+            </button>
+          </div>
+
+          <div id="reviewsSection" class="mt-4">
+            <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-xs font-medium text-slate-600">每日复盘摘要</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="inline-flex rounded-lg border border-indigo-200/80 bg-white p-0.5 text-xs shadow-sm">
+                  <button
+                    type="button"
+                    id="btnReviewsAll"
+                    class="rounded-md px-3 py-1.5 font-semibold text-indigo-800 transition hover:bg-indigo-50"
+                  >
+                    全部
+                  </button>
+                  <button
+                    type="button"
+                    id="btnReviewsByWeek"
+                    class="rounded-md px-3 py-1.5 font-medium text-slate-500 transition hover:bg-slate-50"
+                  >
+                    按周
+                  </button>
+                </div>
+                <div id="reviewsWeekNav" class="hidden flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    id="btnReviewsPrevWeek"
+                    class="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-200 bg-white text-sm font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50"
+                    title="上一周"
+                  >
+                    ‹
+                  </button>
+                  <span id="reviewsWeekLabel" class="min-w-[8.5rem] text-center text-[11px] font-semibold text-indigo-900 sm:min-w-[11rem] sm:text-xs"></span>
+                  <button
+                    type="button"
+                    id="btnReviewsNextWeek"
+                    class="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-200 bg-white text-sm font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50"
+                    title="下一周"
+                  >
+                    ›
+                  </button>
+                  <button
+                    type="button"
+                    id="btnReviewsThisWeek"
+                    class="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-800 hover:bg-indigo-100 sm:text-xs"
+                    title="跳到本周"
+                  >
+                    本周
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div
+              id="reviewsScrollWrap"
+              class="max-h-[min(55vh,480px)] overflow-y-auto rounded-xl border border-indigo-100/80 bg-indigo-50/30 p-2 shadow-inner sm:p-3"
+            >
+              <div id="reviewsPanel" class="space-y-2"></div>
+              <p id="reviewsEmptyHint" class="hidden py-10 text-center text-sm text-slate-500">暂无记录</p>
+            </div>
+          </div>
+
+          <div id="chatPlaceholder" class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-10 text-center text-sm text-slate-500">
+            请先<strong class="text-slate-700">点击上方日记本卡片</strong>，再在本窗口以对话形式书写；列表仅显示当前选中日记本中的日记。
+          </div>
+
+          <div id="chatThread" class="mt-4 hidden flex max-h-[min(70vh,560px)] flex-col rounded-2xl border border-slate-200/80 bg-slate-100/90 shadow-inner">
+            <div class="border-b border-slate-200/80 bg-white/90 px-3 py-2">
+              <p class="text-xs font-medium text-slate-600">
+                当前日记本：<span id="chatNotebookTitle" class="text-brand-700"></span>
+              </p>
+            </div>
+            <div id="chatMessages" class="min-h-[220px] flex-1 space-y-3 overflow-y-auto px-3 py-4">
+              <!-- 加载更多指示器 -->
+              <div id="chatLoadMore" class="hidden py-2 text-center text-xs text-slate-400">
+                <i class="fa-solid fa-spinner fa-spin mr-1"></i>加载更多…
+              </div>
+            </div>
+            <div class="border-t border-slate-200/80 bg-white/95 p-3">
+              <p class="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400">发送前标签（可选）</p>
+              <div id="chatComposerTags" class="mb-3 flex flex-wrap gap-2 rounded-xl border border-slate-100 bg-slate-50/80 p-2 text-xs"></div>
+              <input id="chatImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" />
+              <div class="flex gap-2">
+                <textarea
+                  id="chatInput"
+                  rows="3"
+                  maxlength="16000"
+                  placeholder="输入内容，Ctrl+Enter 发送；可插入本日记本内的图片"
+                  class="min-h-[4.5rem] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none focus:border-brand-400 focus:ring-2 focus:ring-violet-100"
+                ></textarea>
+                <div class="flex shrink-0 flex-col gap-2 self-end">
+                  <button
+                    id="btnChatUpload"
+                    type="button"
+                    title="上传图片到本日记本"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <i class="fa-solid fa-image text-brand-600"></i>
+                  </button>
+                  <button
+                    id="btnSendChat"
+                    type="button"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+                  >
+                    <i class="fa-solid fa-paper-plane"></i>
+                  </button>
+                </div>
+              </div>
+              <p class="mt-2 text-[11px] text-slate-400">标题可选：在弹窗中编辑已发送条目时填写。支持 JPG/PNG/GIF/WebP，单张不超过 5MB。</p>
+              <span id="chatFormHint" class="mt-1 block text-xs text-brand-600"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="flex w-full shrink-0 flex-row flex-wrap gap-2 lg:sticky lg:top-4 lg:w-[7.5rem] lg:flex-col lg:flex-nowrap lg:self-start lg:gap-2.5">
+        <p class="hidden w-full text-[10px] font-medium uppercase tracking-wide text-slate-400 lg:block">筛选</p>
+        <nav id="tagSidebar" class="flex max-h-[min(70vh,520px)] flex-row flex-wrap content-start gap-2 overflow-y-auto lg:flex-col lg:flex-nowrap"></nav>
+        <button
+          type="button"
+          id="btnSidebarAddTag"
+          title="新建标签"
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-slate-800 bg-white text-lg font-light text-slate-900 shadow-sm transition hover:bg-slate-50 lg:mx-auto"
+        >
+          +
+        </button>
+      </aside>
+    </div>
+  </main>
+
+  <!-- 图片预览弹窗 -->
+  <div id="imagePreviewModal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" aria-modal="true" role="dialog">
+    <div id="imagePreviewBackdrop" class="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"></div>
+    <div class="relative z-10 flex max-h-[90vh] max-w-[90vw] items-center justify-center">
+      <button
+        type="button"
+        id="imagePreviewClose"
+        class="absolute -right-3 -top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-lg hover:bg-slate-100"
+        aria-label="关闭预览"
+      >
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <img id="imagePreviewImg" src="" alt="预览" class="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl" />
+    </div>
+  </div>
+
+  <!-- 点击聊天气泡：编辑 / 标签 / 删除 -->
+  <div id="entryModal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4" aria-modal="true" role="dialog">
+    <div id="entryModalBackdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"></div>
+    <div class="relative z-10 max-h-[min(92vh,720px)] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-100 bg-white p-5 shadow-2xl">
+      <button
+        type="button"
+        id="entryModalCloseX"
+        class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        aria-label="关闭"
+      >
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h3 class="font-display pr-10 text-base font-semibold text-slate-900">编辑日记</h3>
+      <p class="mt-1 text-xs text-slate-500">点击下方正文即可修改；可勾选标签或删除整条。</p>
+      <div class="mt-4 space-y-3">
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-500" for="modalEntryTitle">标题（可选）</label>
+          <input
+            id="modalEntryTitle"
+            type="text"
+            maxlength="200"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-violet-100"
+          />
+        </div>
+        <div>
+          <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <label class="block text-xs font-medium text-slate-500" for="modalEntryBody">正文</label>
+            <div class="flex items-center gap-2">
+              <input id="modalImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" />
+              <button
+                id="btnModalUpload"
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                <i class="fa-solid fa-image text-brand-600"></i> 插入图片
+              </button>
+            </div>
+          </div>
+          <textarea
+            id="modalEntryBody"
+            rows="10"
+            maxlength="16000"
+            class="w-full resize-y rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm leading-relaxed outline-none focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-violet-100"
+          ></textarea>
+          <p class="mt-1 text-[11px] text-slate-400">可使用 <span class="font-mono">![](图片地址)</span> 插入已上传图片。</p>
+        </div>
+        <div>
+          <p class="mb-1 text-xs font-medium text-slate-500">标签</p>
+          <div id="modalEntryTags" class="flex flex-wrap gap-2 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-sm"></div>
+        </div>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+        <button id="modalEntrySave" type="button" class="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">保存</button>
+        <button id="modalEntryDelete" type="button" class="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100">删除本条</button>
+        <button id="modalEntryClose" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 侧边栏加号：标签管理弹窗 -->
+  <div id="tagManageModal" class="fixed inset-0 z-[102] hidden items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="tagManageModalTitle">
+    <div id="tagManageModalBackdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"></div>
+    <div class="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl">
+      <button
+        type="button"
+        id="tagManageModalCloseX"
+        class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        aria-label="关闭"
+      >
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <div class="border-b border-slate-100 px-5 pb-4 pt-5 pr-14">
+        <h3 id="tagManageModalTitle" class="font-display text-base font-semibold text-slate-900">
+          <i class="fa-solid fa-tags mr-2 text-brand-500"></i>标签管理
+        </h3>
+        <p class="mt-1 text-xs text-slate-500">标签仅属于当前选中的日记本；创建或删除后列表会立即更新。</p>
+      </div>
+      <div class="max-h-[min(70vh,420px)] space-y-4 overflow-y-auto px-5 py-4">
+        <div class="flex flex-wrap gap-2">
+          <input
+            id="newTagName"
+            type="text"
+            maxlength="64"
+            placeholder="新标签名称"
+            class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-violet-100"
+          />
+          <button id="btnCreateTag" type="button" class="shrink-0 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900">添加</button>
+        </div>
+        <ul id="tagManageList" class="space-y-2 text-sm"></ul>
+        <p id="tagManageEmpty" class="hidden py-6 text-center text-xs text-slate-400">暂无标签，请先添加</p>
+      </div>
+      <div class="border-t border-slate-100 px-5 py-3">
+        <button id="tagManageModalCloseBtn" type="button" class="w-full rounded-xl border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app-config.js"></script>
+  <script src="js/app-nav.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    (() => {
+      const SUPABASE_URL = String(window.APP_CONFIG?.SUPABASE_URL || '').trim().replace(/\/$/, '');
+      const SUPABASE_ANON_KEY = String(window.APP_CONFIG?.SUPABASE_ANON_KEY || '').trim();
+      if (!/^https?:\/\//i.test(SUPABASE_URL) || !SUPABASE_ANON_KEY) {
+        alert('请在 app-config.js 中配置 SUPABASE_URL 与 SUPABASE_ANON_KEY。');
+        return;
+      }
+      const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const AUTH_KEY = 'study-plan-auth';
+      let auth = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+      if (!auth?.token || !auth?.user?.id) {
+        location.replace('login1.html');
+        return;
+      }
+      const authUid = String(auth?.user?.id || '').trim();
+
+      const $ = (id) => document.getElementById(id);
+      $('userChip').textContent = `${auth.user.username}`;
+
+      // ===== Toast 系统 =====
+      function showToast(msg, type) {
+        type = type || 'info';
+        const colors = { info: 'bg-brand-600', success: 'bg-emerald-600', error: 'bg-red-600', warning: 'bg-amber-600' };
+        const bg = colors[type] || colors.info;
+        const container = document.getElementById('toastContainer') || (function() {
+          const c = document.createElement('div');
+          c.id = 'toastContainer';
+          c.className = 'fixed bottom-6 left-1/2 z-[999] flex -translate-x-1/2 flex-col items-center gap-2 pointer-events-none';
+          document.body.appendChild(c);
+          return c;
+        })();
+        const el = document.createElement('div');
+        el.className = `pointer-events-auto rounded-xl ${bg} px-5 py-2.5 text-sm font-medium text-white shadow-xl backdrop-blur-sm transition-all duration-300`;
+        el.textContent = msg;
+        container.appendChild(el);
+        requestAnimationFrame(() => { el.style.opacity = '1'; });
+        setTimeout(() => {
+          el.style.opacity = '0';
+          el.style.transform = 'translateY(8px)';
+          setTimeout(() => el.remove(), 300);
+        }, 2500);
+      }
+      function toastInfo(msg) { showToast(msg, 'info'); }
+      function toastSuccess(msg) { showToast(msg, 'success'); }
+      function toastError(msg) { showToast(msg, 'error'); }
+      function toastWarning(msg) { showToast(msg, 'warning'); }
+
+      // ===== 数据缓存（增强版） =====
+      const CACHE_PREFIX = 'diary_cache_';
+      const CACHE_TTL_NOTEBOOKS = 60000;   // 日记本缓存 60 秒
+      const CACHE_TTL_TAGS = 60000;        // 标签缓存 60 秒
+      const CACHE_TTL_REVIEWS = 30000;     // 复盘缓存 30 秒
+      function cacheGet(key, ttl) {
+        try {
+          const raw = localStorage.getItem(CACHE_PREFIX + key);
+          if (!raw) return null;
+          const { data, ts } = JSON.parse(raw);
+          if (Date.now() - ts > ttl) { localStorage.removeItem(CACHE_PREFIX + key); return null; }
+          return data;
+        } catch { return null; }
+      }
+      function cacheSet(key, data) {
+        try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+      }
+      function cacheClear() {
+        Object.keys(localStorage).filter(k => k.startsWith(CACHE_PREFIX)).forEach(k => localStorage.removeItem(k));
+      }
+
+      // ===== 分页状态 =====
+      const PAGE_SIZE = 30;
+      let diaryEntriesAll = [];       // 全量（用于标签筛选）
+      let diaryEntriesPage = 0;
+      let diaryEntriesLoading = false;
+      let diaryEntriesHasMore = true;
+      let diaryEntriesLoaded = false; // 是否已加载过全量
+
+      let notebooks = [];
+      let diaryTagList = [];
+      let diaryEntries = [];
+      let dailyReviews = [];
+      /** @type {string|null} null | "id:12" | "legacy:名称" */
+      let selectedTagKey = null;
+      /** @type {string|null} 选中日记本 id，仅列表/对话显示该本日记 */
+      let selectedNotebookId = null;
+      /** 每日复盘列表：true=展示全部（可滚动）；false=仅当前筛选周 */
+      let reviewsFilterAll = true;
+      /** 按周筛选时的周一（本地日期），与 reviewsFilterAll 配合使用 */
+      let reviewsWeekMonday = null;
+      /** @type {string|null} 弹窗正在编辑的日记 id */
+      let currentModalEntryId = null;
+      /** 弹窗内上传图片用：当前条目的日记本 id */
+      let modalNotebookIdForImage = null;
+      /** 搜索关键词 */
+      let searchQuery = '';
+      /** 日记本排序字段 */
+      let notebookSortBy = 'created_at';
+
+      /** 日记本卡片背景色（循环使用） */
+      const NOTEBOOK_CARD_BGS = [
+        'bg-pink-200',
+        'bg-sky-300',
+        'bg-violet-200',
+        'bg-teal-400',
+        'bg-rose-300',
+        'bg-fuchsia-300',
+        'bg-blue-500',
+        'bg-pink-400',
+        'bg-fuchsia-900',
+      ];
+
+      /** 右侧标签竖条：与示意图类似的彩色 pill（「全部」单独处理） */
+      const TAG_PILL_STYLES = [
+        'border-0 bg-red-300 text-white shadow-sm',
+        'border-0 bg-blue-500 text-white shadow-sm',
+        'border-0 bg-pink-300 text-white shadow-sm',
+        'border-0 bg-lime-600 text-white shadow-sm',
+        'border-0 bg-sky-400 text-white shadow-sm',
+        'border-0 bg-slate-700 text-white shadow-sm',
+        'border-0 bg-emerald-300 text-slate-900 shadow-sm',
+        'border-0 bg-cyan-400 text-white shadow-sm',
+      ];
+
+      function isFolderNotebook(n) {
+        return String(n.kind || '') === 'folder' || /操作指南/.test(String(n.name || ''));
+      }
+
+      function notebookCardInnerIcon() {
+        return '<i class="fa-solid fa-file-lines text-base text-white/95 drop-shadow sm:text-lg"></i>';
+      }
+
+      async function sbRequest(pathAndQuery, init = {}) {
+        const qm = pathAndQuery.indexOf('?');
+        const p = qm >= 0 ? pathAndQuery.slice(0, qm) : pathAndQuery;
+        const q = qm >= 0 ? pathAndQuery.slice(qm + 1) : '';
+        const method = String(init.method || 'GET').toUpperCase();
+        const rawBody =
+          init.body == null ? null : typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
+        const headers = {
+          Accept: 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: auth?.token ? `Bearer ${auth.token}` : `Bearer ${SUPABASE_ANON_KEY}`,
+        };
+        if (method !== 'GET' && method !== 'HEAD') headers['Content-Type'] = 'application/json';
+        if (init.headers && typeof init.headers === 'object') Object.assign(headers, init.headers);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1${p}${q ? `?${q}` : ''}`, {
+          method,
+          headers,
+          body: method === 'GET' || method === 'HEAD' ? undefined : rawBody,
+        });
+        const text = await res.text();
+        if (res.status === 204) return null;
+        let data = null;
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = { raw: text };
+          }
+        }
+        if (!res.ok) {
+          const msg =
+            (data && (data.message || data.error_description)) || `请求失败（HTTP ${res.status}）`;
+          const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+          err.httpStatus = res.status;
+          throw err;
+        }
+        return data;
+      }
+
+      function parseTagsJson(raw) {
+        try {
+          const a = JSON.parse(raw || '[]');
+          return Array.isArray(a) ? a.map((x) => String(x)) : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function selectedTagNamesFromIds(tagIds) {
+        const idSet = new Set((Array.isArray(tagIds) ? tagIds : []).map((x) => String(x)));
+        return diaryTagList
+          .filter((t) => idSet.has(String(t.id)))
+          .map((t) => String(t.name || '').trim())
+          .filter(Boolean);
+      }
+
+      /** @returns {{ id: string|null, name: string, legacy?: boolean }[]} */
+      function getEntryTagsList(e) {
+        if (Array.isArray(e.tags) && e.tags.length) {
+          return e.tags.map((t) => ({
+            id: t.id != null ? String(t.id) : null,
+            name: String(t.name || ''),
+            legacy: !!t.legacy,
+          }));
+        }
+        const byName = new Map(
+          diaryTagList.map((t) => [String(t.name || '').trim(), { id: String(t.id), name: String(t.name || '').trim() }])
+        );
+        const out = [];
+        const seen = new Set();
+        parseTagsJson(e.tags_json).forEach((rawName) => {
+          const name = String(rawName || '').trim();
+          if (!name || seen.has(name)) return;
+          seen.add(name);
+          const hit = byName.get(name);
+          if (hit) out.push({ id: hit.id, name: hit.name, legacy: false });
+          else out.push({ id: null, name, legacy: true });
+        });
+        return out;
+      }
+
+      function formatDateZh(dateKey) {
+        const s = String(dateKey || '').trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return s;
+        return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
+      }
+
+      function padDatePart(n) {
+        return String(n).padStart(2, '0');
+      }
+
+      function dateKeyLocal(d) {
+        return `${d.getFullYear()}-${padDatePart(d.getMonth() + 1)}-${padDatePart(d.getDate())}`;
+      }
+
+      /** 本地日历周的周一 00:00 对应日期 */
+      function startOfWeekMondayFromDate(d) {
+        const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const day = x.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        x.setDate(x.getDate() + diff);
+        return x;
+      }
+
+      function addDaysLocal(d, n) {
+        const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        x.setDate(x.getDate() + n);
+        return x;
+      }
+
+      function formatWeekRangeLabel(monday) {
+        const sun = addDaysLocal(monday, 6);
+        return `${dateKeyLocal(monday)} ~ ${dateKeyLocal(sun)}`;
+      }
+
+      // ===== 图片压缩 =====
+      function compressImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.85) {
+        return new Promise((resolve, reject) => {
+          if (!file.type.startsWith('image/')) return resolve(file);
+          const img = new Image();
+          img.onload = () => {
+            let w = img.width, h = img.height;
+            if (w <= maxWidth && h <= maxHeight && file.size < 5 * 1024 * 1024) {
+              resolve(file);
+              return;
+            }
+            if (w > maxWidth) { h = h * maxWidth / w; w = maxWidth; }
+            if (h > maxHeight) { w = w * maxHeight / h; h = maxHeight; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob((blob) => {
+              if (!blob) { reject(new Error('图片压缩失败')); return; }
+              const compressed = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+              resolve(compressed);
+            }, 'image/jpeg', quality);
+          };
+          img.onerror = () => reject(new Error('图片加载失败'));
+          const url = URL.createObjectURL(file);
+          img.src = url;
+        });
+      }
+
+      // ===== 图片预览 =====
+      function openImagePreview(src) {
+        const modal = $('imagePreviewModal');
+        const img = $('imagePreviewImg');
+        img.src = src;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      function closeImagePreview() {
+        const modal = $('imagePreviewModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        $('imagePreviewImg').src = '';
+      }
+      $('imagePreviewBackdrop').onclick = closeImagePreview;
+      $('imagePreviewClose').onclick = closeImagePreview;
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') closeImagePreview();
+      });
+
+      // ===== 图片上传（带压缩） =====
+      async function uploadDiaryImage(notebookId, file) {
+        const compressed = await compressImage(file);
+        const ext = 'jpg';
+        const ts = Date.now();
+        const r = String(Math.random()).slice(2, 10);
+        const path = `diary/${authUid}/${notebookId}/${ts}_${r}.${ext}`;
+        const { data, error } = await sbClient.storage.from('images').upload(path, compressed, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: 'image/jpeg',
+        });
+        if (error) throw error;
+        const { data: pub } = sbClient.storage.from('images').getPublicUrl(path);
+        return pub?.publicUrl || `${SUPABASE_URL}/storage/v1/object/public/images/${path}`;
+      }
+
+      // ===== 分页加载日记条目 =====
+      async function loadDiaryEntriesPage(reset = false) {
+        if (diaryEntriesLoading) return;
+        if (reset) {
+          diaryEntriesPage = 0;
+          diaryEntriesHasMore = true;
+          diaryEntries = [];
+        }
+        if (!diaryEntriesHasMore) return;
+        diaryEntriesLoading = true;
+        const loadMoreEl = $('chatLoadMore');
+        if (loadMoreEl) loadMoreEl.classList.remove('hidden');
+        try {
+          const offset = diaryEntriesPage * PAGE_SIZE;
+          let query = `/diary_entries?select=*&order=created_at.desc&limit=${PAGE_SIZE}&offset=${offset}`;
+          if (selectedNotebookId) {
+            query += `&notebook_id=eq.${encodeURIComponent(selectedNotebookId)}`;
+          }
+          const data = await sbRequest(query);
+          const items = Array.isArray(data) ? data : [];
+          if (items.length < PAGE_SIZE) diaryEntriesHasMore = false;
+          diaryEntries = reset ? items : [...diaryEntries, ...items];
+          diaryEntriesPage++;
+          renderChatPanel();
+        } catch (e) {
+          toastError(e.message || '加载失败');
+        } finally {
+          diaryEntriesLoading = false;
+          if (loadMoreEl) loadMoreEl.classList.add('hidden');
+        }
+      }
+
+      // ===== 加载全量日记（用于标签筛选） =====
+      async function loadAllDiaryEntries() {
+        let query = '/diary_entries?select=*&order=created_at.desc';
+        if (selectedNotebookId) {
+          query += `&notebook_id=eq.${encodeURIComponent(selectedNotebookId)}`;
+        }
+        const data = await sbRequest(query);
+        diaryEntriesAll = Array.isArray(data) ? data : [];
+        diaryEntriesLoaded = true;
+      }
+
+      // ===== 渲染函数 =====
+      function renderNotebookGrid() {
+        const grid = $('notebookGrid');
+        const empty = $('notebookEmpty');
+        grid.innerHTML = '';
+        if (!notebooks.length) {
+          empty.classList.remove('hidden');
+          return;
+        }
+        empty.classList.add('hidden');
+
+        // 排序
+        const sorted = [...notebooks].sort((a, b) => {
+          if (notebookSortBy === 'name') return String(a.name || '').localeCompare(String(b.name || ''));
+          const aVal = a[notebookSortBy] || '';
+          const bVal = b[notebookSortBy] || '';
+          return String(bVal).localeCompare(String(aVal)); // 降序
+        });
+
+        sorted.forEach((n, idx) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'flex flex-col items-stretch';
+          const nid = String(n.id);
+          const isSel = selectedNotebookId === nid;
+
+          const folderLike = isFolderNotebook(n);
+          const bgClass = folderLike ? 'bg-white ring-1 ring-slate-200' : NOTEBOOK_CARD_BGS[idx % NOTEBOOK_CARD_BGS.length];
+
+          const cardShell = document.createElement('div');
+          cardShell.className = 'relative w-full';
+
+          const cardFace = document.createElement('div');
+          cardFace.className = `aspect-square w-full overflow-hidden rounded-xl ${bgClass} shadow-sm transition hover:shadow-md ${
+            isSel ? 'ring-2 ring-brand-500 ring-offset-1' : ''
+          }`;
+
+          const menuWrap = document.createElement('div');
+          menuWrap.className = 'pointer-events-none absolute right-0 top-0 z-20 flex flex-col items-end p-0.5';
+
+          const menuBtn = document.createElement('button');
+          menuBtn.type = 'button';
+          menuBtn.className =
+            'pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/45 text-[10px] text-white shadow-md ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-slate-900/65';
+          menuBtn.title = '更多';
+          menuBtn.innerHTML = '<i class="fa-solid fa-ellipsis"></i>';
+
+          const menu = document.createElement('div');
+          menu.className =
+            'nb-menu-panel pointer-events-auto mt-1 hidden w-[7.75rem] origin-top-right rounded-xl border border-slate-200/90 bg-white py-1 text-xs shadow-xl ring-1 ring-slate-900/5';
+          menu.innerHTML = `<button type="button" class="nb-act-rename block w-full px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50">重命名</button>
+            <button type="button" class="nb-act-del block w-full px-3 py-2.5 text-left text-sm font-medium text-red-600 transition hover:bg-red-50">删除</button>`;
+
+          menuBtn.onclick = (ev) => {
+            ev.stopPropagation();
+            const wasHidden = menu.classList.contains('hidden');
+            closeAllNotebookMenus();
+            if (wasHidden) menu.classList.remove('hidden');
+          };
+
+          const [btnRename, btnDel] = menu.querySelectorAll('button');
+          btnRename.onclick = async (ev) => {
+            ev.stopPropagation();
+            menu.classList.add('hidden');
+            const nn = prompt('新的日记本名称', n.name);
+            if (nn == null) return;
+            const name = nn.trim().slice(0, 200);
+            if (!name) {
+              toastWarning('名称不能为空');
+              return;
+            }
+            try {
+              const patch = { name };
+              if (name === '操作指南' && String(n.kind || '') !== 'folder') patch.kind = 'folder';
+              await sbRequest(`/diary_notebooks?id=eq.${encodeURIComponent(String(n.id))}`, { method: 'PATCH', body: patch });
+              cacheClear();
+              await loadData();
+            } catch (e) {
+              toastError(e.message || '重命名失败');
+            }
+          };
+          btnDel.onclick = async (ev) => {
+            ev.stopPropagation();
+            menu.classList.add('hidden');
+            if (!confirm(`确定删除日记本「${n.name}」及其中的全部日记？`)) return;
+            try {
+              if (String(selectedNotebookId) === String(n.id)) selectedNotebookId = null;
+              await sbRequest(`/diary_notebooks?id=eq.${encodeURIComponent(String(n.id))}`, { method: 'DELETE' });
+              cacheClear();
+              await loadData();
+            } catch (e) {
+              toastError(e.message || '删除失败');
+            }
+          };
+
+          const inner = document.createElement('div');
+          inner.className = 'flex h-full w-full items-center justify-center p-1.5 sm:p-2';
+          if (folderLike) {
+            inner.innerHTML = `<div class="grid h-full w-full grid-cols-2 gap-1 p-0.5">
+              <div class="flex items-center justify-center rounded-lg bg-blue-500">${notebookCardInnerIcon()}</div>
+              <div class="flex items-center justify-center rounded-lg bg-slate-800">${notebookCardInnerIcon()}</div>
+              <div class="flex items-center justify-center rounded-lg bg-rose-400">${notebookCardInnerIcon()}</div>
+              <div class="flex items-center justify-center rounded-lg bg-violet-300">${notebookCardInnerIcon()}</div>
+            </div>`;
+          } else {
+            inner.innerHTML = `<div class="flex items-center justify-center">${notebookCardInnerIcon()}</div>`;
+          }
+
+          cardFace.appendChild(inner);
+          menuWrap.appendChild(menuBtn);
+          menuWrap.appendChild(menu);
+          cardShell.appendChild(cardFace);
+          cardShell.appendChild(menuWrap);
+
+          const cap = document.createElement('p');
+          cap.className = 'mt-1 truncate text-center text-[10px] font-medium leading-tight text-slate-900 sm:text-[11px]';
+          cap.textContent = n.name;
+
+          wrap.appendChild(cardShell);
+          wrap.appendChild(cap);
+
+          wrap.onclick = async (ev) => {
+            if (ev.target.closest('button') || ev.target.closest('.nb-menu-panel')) return;
+            selectedNotebookId = selectedNotebookId === nid ? null : nid;
+            diaryEntriesLoaded = false;
+            diaryEntriesAll = [];
+            await loadData();
+          };
+
+          grid.appendChild(wrap);
+        });
+      }
+
+      function renderTagManageList() {
+        const ul = $('tagManageList');
+        const empty = $('tagManageEmpty');
+        ul.innerHTML = '';
+        if (!diaryTagList.length) {
+          empty.classList.remove('hidden');
+          return;
+        }
+        empty.classList.add('hidden');
+        diaryTagList.forEach((t) => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5';
+          li.innerHTML = `<span class="text-sm font-medium text-slate-800">${String(t.name || '').trim()}</span>`;
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100';
+          delBtn.textContent = '删除';
+          delBtn.onclick = async () => {
+            if (!confirm(`确定删除标签「${String(t.name || '').trim()}」？`)) return;
+            try {
+              await sbRequest(`/diary_tags?id=eq.${encodeURIComponent(String(t.id))}`, { method: 'DELETE' });
+              selectedTagKey = null;
+              cacheClear();
+              await loadData();
+            } catch (e) {
+              toastError(e.message || '删除失败');
+            }
+          };
+          li.appendChild(delBtn);
+          ul.appendChild(li);
+        });
+      }
+
+      function closeAllNotebookMenus() {
+        document.querySelectorAll('.nb-menu-panel').forEach((el) => el.classList.add('hidden'));
+      }
+
+      function renderComposerTagChecks() {
+        const box = $('chatComposerTags');
+        box.innerHTML = '';
+        if (!diaryTagList.length) {
+          box.innerHTML = '<span class="text-xs text-slate-400">暂无标签</span>';
+          return;
+        }
+        diaryTagList.forEach((t) => {
+          const label = document.createElement('label');
+          label.className = 'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 has-[:checked]:border-brand-400 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'composer-tag-cb hidden';
+          cb.value = String(t.id);
+          label.appendChild(cb);
+          label.appendChild(document.createTextNode(String(t.name || '').trim()));
+          box.appendChild(label);
+        });
+      }
+
+      function renderTagSidebar() {
+        const nav = $('tagSidebar');
+        nav.innerHTML = '';
+        const allBtn = document.createElement('button');
+        allBtn.type = 'button';
+        allBtn.className = `rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+          selectedTagKey === null
+            ? 'bg-slate-800 text-white'
+            : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+        }`;
+        allBtn.textContent = '全部';
+        allBtn.onclick = async () => {
+          selectedTagKey = null;
+          await loadData();
+        };
+        nav.appendChild(allBtn);
+        diaryTagList.forEach((t, idx) => {
+          const key = `id:${t.id}`;
+          const pill = document.createElement('button');
+          pill.type = 'button';
+          const style = TAG_PILL_STYLES[idx % TAG_PILL_STYLES.length];
+          pill.className = `rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+            selectedTagKey === key ? 'ring-2 ring-slate-900 ring-offset-1' : ''
+          } ${style}`;
+          pill.textContent = String(t.name || '').trim();
+          pill.onclick = async () => {
+            selectedTagKey = selectedTagKey === key ? null : key;
+            await loadData();
+          };
+          nav.appendChild(pill);
+        });
+      }
+
+      function renderReviewsBlock() {
+        const panel = $('reviewsPanel');
+        const empty = $('reviewsEmptyHint');
+        const weekNav = $('reviewsWeekNav');
+        const label = $('reviewsWeekLabel');
+        panel.innerHTML = '';
+        let filtered = dailyReviews;
+        if (!reviewsFilterAll && reviewsWeekMonday) {
+          const start = dateKeyLocal(reviewsWeekMonday);
+          const end = dateKeyLocal(addDaysLocal(reviewsWeekMonday, 6));
+          filtered = dailyReviews.filter((r) => {
+            const d = String(r.review_date || '').slice(0, 10);
+            return d >= start && d <= end;
+          });
+          weekNav.classList.remove('hidden');
+          label.textContent = formatWeekRangeLabel(reviewsWeekMonday);
+        } else {
+          weekNav.classList.add('hidden');
+        }
+        if (!filtered.length) {
+          empty.classList.remove('hidden');
+          return;
+        }
+        empty.classList.add('hidden');
+        filtered.forEach((r) => {
+          const card = document.createElement('div');
+          card.className = 'rounded-xl border border-indigo-100/70 bg-white p-3 shadow-sm';
+          const dateStr = formatDateZh(r.review_date);
+          card.innerHTML = `<p class="mb-1 text-[11px] font-semibold text-indigo-700">${dateStr}</p>
+            <p class="whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-700">${String(r.content || '').trim()}</p>`;
+          panel.appendChild(card);
+        });
+      }
+
+      function renderChatPanel() {
+        const msgs = $('chatMessages');
+        const placeholder = $('chatPlaceholder');
+        const thread = $('chatThread');
+        const hint = $('chatHint');
+        const title = $('chatNotebookTitle');
+        const clearBtn = $('btnClearNotebookFilter');
+        const searchSection = $('searchSection');
+        const reviewsSection = $('reviewsSection');
+
+        if (!selectedNotebookId) {
+          placeholder.classList.remove('hidden');
+          thread.classList.add('hidden');
+          clearBtn.classList.add('hidden');
+          searchSection.classList.add('hidden');
+          reviewsSection.classList.remove('hidden');
+          hint.textContent = '';
+          return;
+        }
+        placeholder.classList.add('hidden');
+        thread.classList.remove('hidden');
+        clearBtn.classList.remove('hidden');
+        searchSection.classList.remove('hidden');
+        reviewsSection.classList.add('hidden');
+
+        const nb = notebooks.find((n) => String(n.id) === selectedNotebookId);
+        title.textContent = nb ? nb.name : '未知日记本';
+        hint.textContent = `当前显示「${nb ? nb.name : ''}」中的日记`;
+
+        // 搜索过滤
+        let entries = diaryEntries;
+        if (searchQuery.trim()) {
+          const q = searchQuery.trim().toLowerCase();
+          entries = entries.filter((e) => {
+            const c = String(e.content || '').toLowerCase();
+            const t = String(e.title || '').toLowerCase();
+            return c.includes(q) || t.includes(q);
+          });
+        }
+
+        // 标签筛选
+        if (selectedTagKey) {
+          if (selectedTagKey.startsWith('id:')) {
+            const tid = selectedTagKey.slice(3);
+            entries = entries.filter((e) => {
+              const tags = getEntryTagsList(e);
+              return tags.some((t) => t.id === tid);
+            });
+          } else if (selectedTagKey.startsWith('legacy:')) {
+            const legacyName = selectedTagKey.slice(7);
+            entries = entries.filter((e) => {
+              const tags = getEntryTagsList(e);
+              return tags.some((t) => t.name === legacyName);
+            });
+          }
+        }
+
+        msgs.innerHTML = '';
+        if (!entries.length) {
+          msgs.innerHTML = '<p class="py-10 text-center text-xs text-slate-400">暂无日记</p>';
+          return;
+        }
+
+        // 按创建时间降序显示
+        const sorted = [...entries].sort((a, b) => {
+          return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+        });
+
+        sorted.forEach((e) => {
+          const bubble = document.createElement('div');
+          bubble.className = 'chat-bubble cursor-pointer rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm transition hover:border-brand-300 hover:shadow-md';
+          bubble.dataset.entryId = String(e.id);
+          const time = e.created_at ? new Date(e.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+          const tags = getEntryTagsList(e);
+          let tagsHtml = '';
+          if (tags.length) {
+            tagsHtml = `<div class="mb-2 flex flex-wrap gap-1">${tags.map((t) => `<span class="inline-block rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-800">${t.name}</span>`).join('')}</div>`;
+          }
+          let titleHtml = '';
+          if (e.title) {
+            titleHtml = `<p class="mb-1 text-sm font-semibold text-slate-900">${String(e.title).trim()}</p>`;
+          }
+          // 将图片链接转为可点击预览的图片
+          let contentHtml = String(e.content || '').trim();
+          contentHtml = contentHtml.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+            return `<img src="${src}" alt="${alt}" class="chat-img my-1 max-h-48 max-w-full cursor-pointer rounded-lg object-cover shadow-sm" loading="lazy" />`;
+          });
+          contentHtml = contentHtml.replace(/\n/g, '<br />');
+          bubble.innerHTML = `${tagsHtml}${titleHtml}<div class="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">${contentHtml}</div>
+            <p class="mt-1.5 text-right text-[10px] text-slate-400">${time}</p>`;
+          msgs.appendChild(bubble);
+        });
+
+        // 绑定图片点击预览
+        msgs.querySelectorAll('.chat-img').forEach((img) => {
+          img.onclick = (ev) => {
+            ev.stopPropagation();
+            openImagePreview(img.src);
+          };
+        });
+      }
+
+      async function loadData() {
+        // 使用缓存加载日记本
+        let nb = cacheGet('notebooks', CACHE_TTL_NOTEBOOKS);
+        if (!nb) {
+          nb = await sbRequest('/diary_notebooks');
+          cacheSet('notebooks', nb);
+        }
+        notebooks = Array.isArray(nb) ? nb : [];
+
+        // 使用缓存加载复盘
+        let rev = cacheGet('reviews', CACHE_TTL_REVIEWS);
+        if (!rev) {
+          rev = await sbRequest('/daily_reviews?select=id,review_date,content,updated_at&order=review_date.desc');
+          cacheSet('reviews', rev);
+        }
+        dailyReviews = Array.isArray(rev) ? rev : [];
+
+        if (selectedNotebookId && !notebooks.some((n) => String(n.id) === String(selectedNotebookId))) {
+          selectedNotebookId = null;
+        }
+
+        // 使用缓存加载标签
+        let tg = [];
+        if (selectedNotebookId) {
+          const cacheKey = `tags_${selectedNotebookId}`;
+          tg = cacheGet(cacheKey, CACHE_TTL_TAGS);
+          if (!tg) {
+            tg = await sbRequest(`/diary_tags?notebook_id=eq.${encodeURIComponent(String(selectedNotebookId))}`);
+            cacheSet(cacheKey, tg);
+          }
+        }
+        diaryTagList = Array.isArray(tg) ? tg : [];
+
+        if (selectedTagKey && selectedTagKey.startsWith('id:')) {
+          const tid = selectedTagKey.slice(3);
+          if (!diaryTagList.some((t) => String(t.id) === tid)) {
+            selectedTagKey = null;
+          }
+        }
+
+        // 分页加载日记条目
+        await loadDiaryEntriesPage(true);
+
+        // 后台加载全量（用于标签筛选）
+        loadAllDiaryEntries().catch(() => {});
+
+        $('totalEntryCount').textContent = String(diaryEntriesAll.length || diaryEntries.length);
+        renderNotebookGrid();
+        renderTagManageList();
+        renderComposerTagChecks();
+        renderTagSidebar();
+        renderReviewsBlock();
+        renderChatPanel();
+      }
+
+      // ===== 滚动加载更多 =====
+      let chatScrollHandler = null;
+      function setupChatScroll() {
+        const msgs = $('chatMessages');
+        if (chatScrollHandler) msgs.removeEventListener('scroll', chatScrollHandler);
+        chatScrollHandler = () => {
+          if (msgs.scrollTop <= 50 && diaryEntriesHasMore && !diaryEntriesLoading) {
+            loadDiaryEntriesPage(false).then(() => {
+              // 保持滚动位置
+              msgs.scrollTop = 60;
+            });
+          }
+        };
+        msgs.addEventListener('scroll', chatScrollHandler);
+      }
+
+      // ===== 搜索功能 =====
+      let searchTimer = null;
+      $('searchInput').addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          searchQuery = $('searchInput').value;
+          const clearBtn = $('btnClearSearch');
+          if (searchQuery.trim()) {
+            clearBtn.classList.remove('hidden');
+          } else {
+            clearBtn.classList.add('hidden');
+          }
+          renderChatPanel();
+        }, 300);
+      });
+      $('btnClearSearch').onclick = () => {
+        $('searchInput').value = '';
+        searchQuery = '';
+        $('btnClearSearch').classList.add('hidden');
+        renderChatPanel();
+      };
+
+      // ===== 日记本排序 =====
+      $('notebookSort').onchange = () => {
+        notebookSortBy = $('notebookSort').value;
+        renderNotebookGrid();
+      };
+
+      // ===== 发送消息 =====
+      async function sendChatMessage() {
+        $('chatFormHint').textContent = '';
+        if (!selectedNotebookId) {
+          toastWarning('请先点击选择一个日记本');
+          return;
+        }
+        const content = $('chatInput').value.trim();
+        if (!content) {
+          toastWarning('请输入要发送的内容');
+          return;
+        }
+        const title = '';
+        const boxes = document.querySelectorAll('#chatComposerTags .composer-tag-cb:checked');
+        const tag_ids = [...boxes].map((c) => String(c.value));
+        const tags_json = JSON.stringify(selectedTagNamesFromIds(tag_ids));
+        try {
+          await sbRequest('/diary_entries', {
+            method: 'POST',
+            body: { user_id: authUid, notebook_id: selectedNotebookId, title, content, tags_json },
+          });
+          selectedTagKey = null;
+          $('chatInput').value = '';
+          document.querySelectorAll('#chatComposerTags .composer-tag-cb').forEach((c) => {
+            c.checked = false;
+          });
+          $('chatFormHint').textContent = '已发送';
+          setTimeout(() => {
+            $('chatFormHint').textContent = '';
+          }, 2000);
+          cacheClear();
+          await loadData();
+        } catch (e) {
+          toastError(e.message || '发送失败');
+        }
+      }
+
+      $('btnSendChat').onclick = () => sendChatMessage();
+      $('chatInput').addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+          ev.preventDefault();
+          sendChatMessage();
+        }
+      });
+
+      $('btnClearNotebookFilter').onclick = async () => {
+        selectedNotebookId = null;
+        selectedTagKey = null;
+        await loadData();
+      };
+
+      $('chatMessages').addEventListener('click', (ev) => {
+        if (ev.target.tagName === 'IMG') return;
+        const bubble = ev.target.closest('.chat-bubble');
+        if (!bubble || !bubble.dataset.entryId) return;
+        openEntryModal(bubble.dataset.entryId);
+      });
+
+      // ===== 图片上传（带压缩） =====
+      $('btnChatUpload').onclick = () => {
+        if (!selectedNotebookId) {
+          toastWarning('请先选择日记本');
+          return;
+        }
+        $('chatImageInput').value = '';
+        $('chatImageInput').click();
+      };
+
+      $('chatImageInput').onchange = async () => {
+        const f = $('chatImageInput').files && $('chatImageInput').files[0];
+        if (!f || !selectedNotebookId) return;
+        // 检查文件大小
+        if (f.size > 10 * 1024 * 1024) {
+          toastWarning('图片过大，请选择 10MB 以内的图片');
+          return;
+        }
+        $('chatFormHint').textContent = '上传中…';
+        try {
+          const url = await uploadDiaryImage(selectedNotebookId, f);
+          if (url) {
+            const ta = $('chatInput');
+            const ins = `\n![](${url})\n`;
+            ta.value = `${ta.value}${ins}`;
+            ta.focus();
+            $('chatFormHint').textContent = '已插入图片，发送即可保存';
+            setTimeout(() => {
+              $('chatFormHint').textContent = '';
+            }, 2500);
+          }
+        } catch (e) {
+          toastError(e.message || '上传失败');
+          $('chatFormHint').textContent = '';
+        }
+      };
+
+      $('btnModalUpload').onclick = () => {
+        if (!modalNotebookIdForImage) {
+          toastWarning('无法确定日记本');
+          return;
+        }
+        $('modalImageInput').value = '';
+        $('modalImageInput').click();
+      };
+
+      $('modalImageInput').onchange = async () => {
+        const f = $('modalImageInput').files && $('modalImageInput').files[0];
+        if (!f || !modalNotebookIdForImage) return;
+        // 检查文件大小
+        if (f.size > 10 * 1024 * 1024) {
+          toastWarning('图片过大，请选择 10MB 以内的图片');
+          return;
+        }
+        try {
+          const url = await uploadDiaryImage(modalNotebookIdForImage, f);
+          if (url) {
+            const ta = $('modalEntryBody');
+            const ins = `\n![](${url})\n`;
+            ta.value = `${ta.value}${ins}`;
+            ta.focus();
+          }
+        } catch (e) {
+          toastError(e.message || '上传失败');
+        }
+      };
+
+      // ===== 弹窗编辑 =====
+      function openEntryModal(entryId) {
+        const all = diaryEntriesAll.length ? diaryEntriesAll : diaryEntries;
+        const e = all.find((x) => String(x.id) === String(entryId));
+        if (!e) return;
+        currentModalEntryId = String(e.id);
+        modalNotebookIdForImage = String(e.notebook_id || selectedNotebookId || '');
+        $('modalEntryTitle').value = e.title || '';
+        $('modalEntryBody').value = e.content || '';
+        const tagBox = $('modalEntryTags');
+        tagBox.innerHTML = '';
+        const tags = getEntryTagsList(e);
+        const selectedIds = new Set(tags.map((t) => t.id).filter(Boolean));
+        diaryTagList.forEach((t) => {
+          const label = document.createElement('label');
+          label.className = 'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 has-[:checked]:border-brand-400 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-800';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'modal-tag-cb hidden';
+          cb.value = String(t.id);
+          if (selectedIds.has(String(t.id))) cb.checked = true;
+          label.appendChild(cb);
+          label.appendChild(document.createTextNode(String(t.name || '').trim()));
+          tagBox.appendChild(label);
+        });
+        $('entryModal').classList.remove('hidden');
+        $('entryModal').classList.add('flex');
+      }
+
+      function closeEntryModal() {
+        currentModalEntryId = null;
+        modalNotebookIdForImage = null;
+        $('entryModal').classList.add('hidden');
+        $('entryModal').classList.remove('flex');
+      }
+
+      function bindModalHandlers() {
+        const close = () => closeEntryModal();
+        $('entryModalBackdrop').onclick = close;
+        $('entryModalCloseX').onclick = close;
+        $('modalEntryClose').onclick = close;
+        $('modalEntrySave').onclick = async () => {
+          if (!currentModalEntryId) return;
+          const title = $('modalEntryTitle').value.trim().slice(0, 200);
+          const content = $('modalEntryBody').value.trim();
+          if (!content) {
+            toastWarning('正文不能为空');
+            return;
+          }
+          const boxes = document.querySelectorAll('#modalEntryTags .modal-tag-cb:checked');
+          const tag_ids = [...boxes].map((c) => String(c.value));
+          const tags_json = JSON.stringify(selectedTagNamesFromIds(tag_ids));
+          try {
+            await sbRequest(`/diary_entries?id=eq.${encodeURIComponent(currentModalEntryId)}`, {
+              method: 'PATCH',
+              body: { title, content, tags_json },
+            });
+            closeEntryModal();
+            toastSuccess('保存成功');
+            cacheClear();
+            await loadData();
+          } catch (e) {
+            toastError(e.message || '保存失败');
+          }
+        };
+        $('modalEntryDelete').onclick = async () => {
+          if (!currentModalEntryId) return;
+          if (!confirm('确定删除这条日记？')) return;
+          try {
+            await sbRequest(`/diary_entries?id=eq.${encodeURIComponent(currentModalEntryId)}`, { method: 'DELETE' });
+            closeEntryModal();
+            toastSuccess('已删除');
+            cacheClear();
+            await loadData();
+          } catch (e) {
+            toastError(e.message || '删除失败');
+          }
+        };
+      }
+      bindModalHandlers();
+
+      $('tagManageModalBackdrop').onclick = () => closeTagManageModal();
+      $('tagManageModalCloseX').onclick = () => closeTagManageModal();
+      $('tagManageModalCloseBtn').onclick = () => closeTagManageModal();
+
+      function closeTagManageModal() {
+        $('tagManageModal').classList.add('hidden');
+        $('tagManageModal').classList.remove('flex');
+      }
+
+      function openTagManageModal() {
+        $('tagManageModal').classList.remove('hidden');
+        $('tagManageModal').classList.add('flex');
+      }
+
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Escape') return;
+        const tagM = $('tagManageModal');
+        if (tagM && !tagM.classList.contains('hidden')) {
+          closeTagManageModal();
+          return;
+        }
+        if ($('entryModal') && !$('entryModal').classList.contains('hidden')) {
+          closeEntryModal();
+        }
+        if ($('imagePreviewModal') && !$('imagePreviewModal').classList.contains('hidden')) {
+          closeImagePreview();
+        }
+      });
+
+      if (!window.__diaryNotebookMenuCloseBound) {
+        window.__diaryNotebookMenuCloseBound = true;
+        document.addEventListener('click', () => closeAllNotebookMenus());
+      }
+
+      $('btnSidebarAddTag').onclick = (e) => {
+        e.preventDefault();
+        openTagManageModal();
+      };
+
+      (function initReviewsFilterUI() {
+        const all = $('btnReviewsAll');
+        const byWeek = $('btnReviewsByWeek');
+        const prev = $('btnReviewsPrevWeek');
+        const next = $('btnReviewsNextWeek');
+        const thisWeek = $('btnReviewsThisWeek');
+        if (!all || !byWeek || !prev || !next || !thisWeek) return;
+
+        all.onclick = () => {
+          reviewsFilterAll = true;
+          reviewsWeekMonday = null;
+          renderReviewsBlock();
+        };
+        byWeek.onclick = () => {
+          reviewsFilterAll = false;
+          if (!reviewsWeekMonday) {
+            reviewsWeekMonday = startOfWeekMondayFromDate(new Date());
+          }
+          renderReviewsBlock();
+        };
+        prev.onclick = () => {
+          if (!reviewsWeekMonday) return;
+          reviewsWeekMonday = addDaysLocal(reviewsWeekMonday, -7);
+          renderReviewsBlock();
+        };
+        next.onclick = () => {
+          if (!reviewsWeekMonday) return;
+          reviewsWeekMonday = addDaysLocal(reviewsWeekMonday, 7);
+          renderReviewsBlock();
+        };
+        thisWeek.onclick = () => {
+          reviewsWeekMonday = startOfWeekMondayFromDate(new Date());
+          renderReviewsBlock();
+        };
+      })();
+
+      // ===== 创建日记本 =====
+      $('btnCreateNotebook').onclick = async () => {
+        const name = $('newNotebookName').value.trim().slice(0, 200);
+        if (!name) {
+          toastWarning('请输入日记本名称');
+          return;
+        }
+        try {
+          await sbRequest('/diary_notebooks', {
+            method: 'POST',
+            body: { user_id: authUid, name },
+          });
+          $('newNotebookName').value = '';
+          toastSuccess('日记本创建成功');
+          cacheClear();
+          await loadData();
+        } catch (e) {
+          toastError(e.message || '创建失败');
+        }
+      };
+
+      // ===== 创建标签 =====
+      $('btnCreateTag').onclick = async () => {
+        const name = $('newTagName').value.trim().slice(0, 64);
+        if (!name) {
+          toastWarning('请输入标签名称');
+          return;
+        }
+        if (!selectedNotebookId) {
+          toastWarning('请先选择日记本');
+          return;
+        }
+        try {
+          await sbRequest('/diary_tags', {
+            method: 'POST',
+            body: { user_id: authUid, notebook_id: selectedNotebookId, name },
+          });
+          $('newTagName').value = '';
+          toastSuccess('标签添加成功');
+          cacheClear();
+          await loadData();
+        } catch (e) {
+          toastError(e.message || '添加失败');
+        }
+      };
+
+      // ===== 初始化 =====
+      (async function init() {
+        try {
+          AppNav.mountAppShell('main', 'diary');
+          await loadData();
+          setupChatScroll();
+        } catch (e) {
+          toastError(e.message || '加载失败');
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>
+
