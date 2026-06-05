@@ -1,0 +1,230 @@
+/* 应用壳层：左侧浅色侧栏 + 主内容区（与 plan 页 brand 风格一致） */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.app-shell-main {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}
+
+/* —— 侧栏 —— */
+.app-nav-rail {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: 15rem;
+  min-height: 100vh;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 2px 0 16px rgba(14, 165, 233, 0.06);
+  color: #334155;
+  padding: 0;
+}
+
+.app-nav-brand {
+  padding: 1.25rem 1rem 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(135deg, rgba(240, 249, 255, 0.9) 0%, rgba(255, 255, 255, 0.5) 100%);
+}
+
+.app-nav-brand-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.app-nav-brand-title i,
+.app-nav-brand-accent {
+  color: #0ea5e9;
+}
+
+.app-nav-brand-tag {
+  display: inline-block;
+  margin-top: 0.35rem;
+  border-radius: 0.375rem;
+  border: 1px solid #bae6fd;
+  background: #e0f2fe;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.app-nav-group-label {
+  padding: 0.75rem 1rem 0.35rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.app-nav-links {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0.5rem;
+}
+
+.app-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  margin: 0.125rem 0;
+  border-radius: 0.5rem;
+  border-left: 3px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #64748b;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.app-nav-item i {
+  width: 1.125rem;
+  text-align: center;
+  font-size: 0.9375rem;
+  flex-shrink: 0;
+  color: #94a3b8;
+  transition: color 0.15s;
+}
+
+.app-nav-item:hover {
+  background: rgba(240, 249, 255, 0.85);
+  color: #0284c7;
+}
+
+.app-nav-item:hover i {
+  color: #0ea5e9;
+}
+
+.app-nav-item.is-active {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-left-color: #0ea5e9;
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.12);
+}
+
+.app-nav-item.is-active i {
+  color: #0284c7;
+}
+
+.app-nav-footer {
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  padding: 0.5rem;
+  background: rgba(248, 250, 252, 0.6);
+}
+
+.app-nav-footer .app-nav-item {
+  color: #64748b;
+}
+
+.app-nav-footer .app-nav-item:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.app-nav-footer .app-nav-item:hover i {
+  color: #dc2626;
+}
+
+/* 主区顶栏面包屑 */
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+  box-shadow: 0 1px 0 rgba(14, 165, 233, 0.04);
+}
+
+.app-topbar-breadcrumb {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-topbar-breadcrumb strong {
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.app-topbar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #0284c7;
+  cursor: pointer;
+}
+
+.app-topbar-toggle:hover {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+/* 遮罩（移动端抽屉） */
+.app-nav-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(2px);
+}
+
+.app-nav-backdrop.is-open {
+  display: block;
+}
+
+.glass-panel {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* —— 移动端：抽屉侧栏 —— */
+@media (max-width: 768px) {
+  .app-nav-rail {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 4px 0 24px rgba(14, 165, 233, 0.12);
+  }
+
+  .app-nav-rail.is-open {
+    transform: translateX(0);
+  }
+
+  .app-topbar-toggle {
+    display: inline-flex;
+  }
+
+  .app-shell-main {
+    width: 100%;
+  }
+}
