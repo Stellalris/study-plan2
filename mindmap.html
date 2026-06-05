@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="auth-helper.js"></script>
+  <script>
+    (async function () {
+      try {
+        var auth = await AuthHelper.ensureSession();
+        if (!auth) location.replace('login1.html');
+      } catch (e) {
+        location.replace('login1.html');
+      }
+    })();
+  </script>
+  <title>思维导图 · Study Plan</title>
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    #mindMapStage {
+      position: relative;
+      flex: 1;
+      min-height: calc(100vh - 22rem);
+    }
+    #mindMapContainer {
+      position: relative;
+      overflow: hidden;
+      height: calc(100vh - 22rem);
+      min-height: 28rem;
+      max-height: 56rem;
+    }
+    @media (max-width: 768px) {
+      #mindMapStage { min-height: calc(100vh - 20rem); }
+      #mindMapContainer {
+        height: calc(100vh - 20rem);
+        min-height: 20rem;
+        max-height: none;
+      }
+    }
+    #mindMapLinkTray {
+      max-height: 9rem;
+      overflow-y: auto;
+    }
+    #mindMapContainer .smm-mind-map-container { background: transparent !important; }
+    #mindMapFullscreenContainer { position: relative; overflow: hidden; }
+    #mindMapFullscreenContainer .smm-mind-map-container { background: #fff !important; }
+    .mindmap-style-btn.is-active { background: #0ea5e9; color: #fff; }
+    #mindMapExpandBtn, #mindMapCollapseBtn { z-index: 20; pointer-events: auto; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12); }
+    #mindMapStage.mind-map-stage-expanded {
+      position: fixed; inset: 0.75rem; z-index: 55; display: flex; flex-direction: column; overflow: hidden;
+      border-radius: 1rem; border: 1px solid rgba(255,255,255,.85); background: #fff;
+      box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
+    }
+    #mindMapStage.mind-map-stage-expanded #mindMapContainer { height: 100% !important; min-height: 0; flex: 1; border-radius: 0.75rem; }
+    .mindmap-link-chip { cursor: pointer; transition: border-color .15s, background-color .15s, box-shadow .15s; }
+    .mindmap-link-chip:hover { border-color: #0ea5e9; background: #f0f9ff; }
+    .mindmap-link-chip.is-on-active { box-shadow: 0 0 0 2px #0ea5e9; border-color: #0284c7; }
+    .mindmap-link-chip.is-done { opacity: 0.72; }
+    #mindMapLinkTray .mindmap-link-chip[draggable="true"] { cursor: grab; }
+    #mindMapStage.mind-map-preview-mode #mindMapContainer { box-shadow: inset 0 0 0 1px rgba(148,163,184,.35); }
+    .mindmap-edit-only.hidden, .mindmap-preview-only.hidden, .mindmap-edit-actions.hidden, .mindmap-preview-actions.hidden { display: none !important; }
+    .mindmap-toolbar-menu {
+      position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 9.5rem;
+      border-radius: 0.75rem; border: 1px solid #e2e8f0; background: #fff; padding: 0.25rem;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
+    }
+    .mindmap-toolbar-menu.hidden { display: none !important; }
+    .mindmap-toolbar-menu-item {
+      display: flex; width: 100%; align-items: center; gap: 0.5rem; border-radius: 0.5rem;
+      padding: 0.5rem 0.625rem; text-align: left; font-size: 0.75rem; font-weight: 500; color: #334155;
+    }
+    .mindmap-toolbar-menu-item:hover:not(:disabled) { background: #f8fafc; }
+    .mindmap-toolbar-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+    .mindmap-color-swatch { cursor: pointer; transition: transform .12s, box-shadow .12s; }
+    .mindmap-color-swatch:hover { transform: scale(1.08); box-shadow: 0 0 0 2px rgba(14,165,233,.35); }
+    .mindmap-color-swatch.is-active { box-shadow: 0 0 0 2px #0ea5e9; }
+    #mindMapCanvasMenu.hidden, #mindMapEmptyHint.hidden { display: none !important; }
+    #mindMapExportBackdrop.hidden, #mindMapFullscreenBackdrop.hidden, #pageInitLock.hidden, #modalBackdrop.hidden { display: none !important; pointer-events: none !important; }
+    #mindMapExportBackdrop:not(.flex), #mindMapFullscreenBackdrop:not(.flex), #modalBackdrop:not(.flex) { pointer-events: none !important; }
+  </style>
+</head>
+<body class="mindmap-page min-h-screen bg-gradient-to-br from-slate-50 via-brand-50/40 to-indigo-50/80 font-sans text-slate-800 antialiased">
+  <div class="pointer-events-none fixed inset-0 overflow-hidden">
+    <div class="absolute -left-32 top-20 h-96 w-96 rounded-full bg-sky-300/20 blur-3xl"></div>
+    <div class="absolute -right-20 bottom-32 h-80 w-80 rounded-full bg-violet-300/25 blur-3xl"></div>
+  </div>
+
+  <div id="pageInitLock" class="fixed inset-0 z-[100] flex items-center justify-center bg-white/85 backdrop-blur-sm">
+    <div class="rounded-2xl border border-slate-200 bg-white px-8 py-6 text-center shadow-lg">
+      <i class="fa-solid fa-spinner fa-spin mb-3 text-2xl text-brand-500"></i>
+      <p class="text-sm font-medium text-slate-700">正在加载思维导图库…</p>
+    </div>
+  </div>
+
+  <main class="relative mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
+    <header class="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm text-slate-600"><span class="font-semibold text-slate-800">任务思维导图</span> · 最多 2 张，分开保存</p>
+      <span id="userChip" class="rounded-lg bg-white/80 px-3 py-1 text-xs font-medium text-slate-600"></span>
+    </header>
+
+    <section class="glass-panel flex flex-col rounded-2xl border border-white/60 bg-white/80 p-3 shadow-glass sm:p-4">
+      <div id="mindMapView">
+        <div id="mindMapToolbarMain" class="mb-2 flex flex-wrap items-center gap-2">
+          <button id="mindMapMapsMenuBtn" type="button" class="mindmap-toolbar-btn inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-diagram-project text-brand-500"></i><span id="mindMapCurrentTitle">未创建思维导图</span><i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i></button>
+          <div id="mindMapViewModeBadge" class="hidden inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600"><i class="fa-solid fa-eye text-slate-400"></i><span>查看模式</span></div>
+          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <span class="text-[11px] text-slate-500"><i id="mindMapSyncIcon" class="fa-solid fa-cloud mr-1 text-emerald-500"></i><span id="mindMapSyncStatus">已同步</span></span>
+            <button id="mindMapEditBtn" type="button" class="hidden mindmap-toolbar-btn rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-pen mr-1"></i>编辑导图</button>
+            <button id="mindMapSaveBtn" type="button" disabled class="mindmap-toolbar-btn rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-800 hover:bg-brand-100 disabled:opacity-45"><i class="fa-solid fa-cloud-arrow-up mr-1"></i>保存思维导图</button>
+          </div>
+        </div>
+        <div id="mindMapContextBar" class="mb-2 hidden flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2">
+          <span id="mindMapContextLabel" class="shrink-0 text-xs font-medium text-slate-600"><i class="fa-solid fa-circle-dot mr-1 text-brand-500 text-[10px]"></i>已选节点</span>
+          <div id="mindMapPreviewActions" class="mindmap-preview-actions flex flex-wrap items-center gap-1.5">
+            <button id="mindMapExportTaskBtn" type="button" disabled class="mindmap-toolbar-btn rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-medium text-violet-900 hover:bg-violet-100"><i class="fa-solid fa-list-check mr-1"></i>加入任务列表</button>
+            <div id="mindMapTaskMenuWrap" class="relative hidden">
+              <button id="mindMapTaskMenuBtn" type="button" class="mindmap-toolbar-btn inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-list mr-1"></i>任务<i class="fa-solid fa-chevron-down ml-0.5 text-[10px] text-slate-400"></i></button>
+              <div id="mindMapTaskMenu" class="mindmap-toolbar-menu hidden" role="menu">
+                <button id="mindMapToggleTaskDone" type="button" disabled class="mindmap-toolbar-menu-item" role="menuitem"><i class="fa-solid fa-circle-check w-3.5 text-emerald-600"></i><span>任务完成</span></button>
+                <button id="mindMapOpenTaskBtn" type="button" disabled class="mindmap-toolbar-menu-item" role="menuitem"><i class="fa-solid fa-pen-to-square w-3.5 text-slate-500"></i><span>编辑任务</span></button>
+              </div>
+            </div>
+          </div>
+          <div id="mindMapEditActions" class="mindmap-edit-actions hidden flex flex-wrap items-center gap-1.5">
+            <button id="mindMapAddChild" type="button" disabled class="mindmap-toolbar-btn rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-800 hover:bg-brand-100"><i class="fa-solid fa-sitemap mr-1"></i>子节点</button>
+            <button id="mindMapAddSibling" type="button" disabled class="mindmap-toolbar-btn rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-plus mr-1"></i>同级</button>
+            <button id="mindMapDelete" type="button" disabled class="mindmap-toolbar-btn rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"><i class="fa-solid fa-trash-can mr-1"></i>删除</button>
+            <div id="mindMapMoreMenuWrap" class="relative">
+              <button id="mindMapMoreMenuBtn" type="button" class="mindmap-toolbar-btn inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-ellipsis mr-1"></i>更多<i class="fa-solid fa-chevron-down ml-0.5 text-[10px] text-slate-400"></i></button>
+              <div id="mindMapMoreMenu" class="mindmap-toolbar-menu hidden" role="menu">
+                <button id="mindMapUndo" type="button" disabled class="mindmap-toolbar-menu-item" role="menuitem"><i class="fa-solid fa-rotate-left w-3.5 text-slate-500"></i><span>撤销</span></button>
+                <button id="mindMapRedo" type="button" disabled class="mindmap-toolbar-menu-item" role="menuitem"><i class="fa-solid fa-rotate-right w-3.5 text-slate-500"></i><span>重做</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="mindMapStage" class="relative flex flex-col">
+          <div id="mindMapEmptyHint" class="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-6 text-center">
+            <p class="text-sm font-medium text-slate-600">还没有思维导图</p>
+            <p class="mt-1 max-w-xs text-xs text-slate-500">在画布上<strong class="font-medium text-slate-600">右键</strong>，或点击左上角标题，新建逻辑图/放射图（最多 2 张）</p>
+          </div>
+          <div id="mindMapContainer" class="w-full flex-1 rounded-xl border border-slate-200 bg-white/95"></div>
+          <button id="mindMapExpandBtn" type="button" class="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200/90 bg-white/95 text-slate-600 shadow-sm backdrop-blur hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700" title="放大查看区域" aria-label="放大查看区域"><i class="fa-solid fa-up-right-and-down-left-from-center text-sm"></i></button>
+          <button id="mindMapCollapseBtn" type="button" class="absolute right-3 top-3 hidden flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200/90 bg-white/95 text-slate-600 shadow-sm backdrop-blur hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700" title="退出放大" aria-label="退出放大"><i class="fa-solid fa-down-left-and-up-right-to-center text-sm"></i></button>
+        </div>
+        <div id="mindMapColorMenu" class="hidden fixed z-[60] min-w-[11.5rem] max-w-[14rem] rounded-xl border border-slate-200 bg-white p-3 shadow-xl" role="menu" aria-label="节点颜色">
+          <p id="mindMapColorMenuTitle" class="mb-2 truncate text-xs font-semibold text-slate-800">节点样式</p>
+          <p class="mb-1 text-[10px] font-medium text-slate-500">填充</p>
+          <div id="mindMapColorMenuFill" class="mb-2 flex flex-wrap gap-1.5"></div>
+          <p class="mb-1 text-[10px] font-medium text-slate-500">边框</p>
+          <div id="mindMapColorMenuBorder" class="mb-2 flex flex-wrap gap-1.5"></div>
+          <p class="mb-1 text-[10px] font-medium text-slate-500">连线</p>
+          <div id="mindMapColorMenuLine" class="mb-2 flex flex-wrap gap-1.5"></div>
+          <button id="mindMapColorMenuReset" type="button" class="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">恢复默认</button>
+        </div>
+        <div id="mindMapCanvasMenu" class="mindmap-toolbar-menu hidden fixed z-[60] min-w-[11rem]" role="menu" aria-label="思维导图列表"></div>
+        <div id="mindMapLinkTray" class="mt-3 rounded-xl border border-slate-200 bg-slate-50/90 p-3">
+          <p class="mb-2 text-xs font-semibold text-slate-600"><i class="fa-solid fa-link mr-1 text-brand-500"></i>关联目标 / 里程碑</p>
+          <div id="mindMapLinkChips" class="flex min-h-[2rem] flex-wrap gap-2 text-xs"></div>
+          <div id="mindMapLinkActions" class="mt-2 hidden flex flex-wrap gap-2">
+            <button id="mindMapToggleLinkDone" type="button" disabled class="mindmap-toolbar-btn rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"><i class="fa-solid fa-circle-check mr-1"></i>关联项完成</button>
+            <button id="mindMapUnlinkBtn" type="button" disabled class="mindmap-toolbar-btn rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-link-slash mr-1"></i>取消关联</button>
+          </div>
+          <p id="mindMapActiveLinkHint" class="mt-2 text-[11px] text-slate-500">选中节点后，点击上方标签进行关联；也可将标签拖到节点上。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="mindMapExportBackdrop" class="fixed inset-0 z-[54] hidden items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm opacity-0 transition-opacity duration-200">
+    <div id="mindMapExportPanel" class="w-full max-w-lg scale-[0.98] rounded-2xl border border-white/80 bg-white p-6 shadow-2xl transition-transform duration-200">
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="font-display text-lg font-semibold text-slate-900"><i class="fa-solid fa-diagram-project mr-2 text-violet-500"></i>导出到任务列表</h3>
+        <button id="mindMapExportClose" type="button" class="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="关闭"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="mb-3 grid gap-3 sm:grid-cols-2">
+        <div><label class="mb-1 block text-xs font-medium text-slate-600" for="mindMapExportDate">任务日期</label><input id="mindMapExportDate" type="date" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-100" /></div>
+        <div><label class="mb-1 block text-xs font-medium text-slate-600" for="mindMapExportDuration">预计时长（分）</label><input id="mindMapExportDuration" type="number" min="5" max="1440" value="45" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-100" /></div>
+        <div><label class="mb-1 block text-xs font-medium text-slate-600" for="mindMapExportPriority">优先级</label><select id="mindMapExportPriority" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-100"><option value="2">高</option><option value="1" selected>中</option><option value="0">低</option></select></div>
+        <div><label class="mb-1 block text-xs font-medium text-slate-600" for="mindMapExportCategory">分类</label><select id="mindMapExportCategory" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-100"><option value="项目">项目</option><option value="练习">练习</option><option value="阅读">阅读</option><option value="其他" selected>其他</option></select></div>
+      </div>
+      <div class="mb-3 space-y-2 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs">
+        <label class="flex cursor-pointer items-center gap-2 font-medium text-slate-700"><input id="mindMapExportIncludeChildren" type="checkbox" class="rounded border-slate-300 text-violet-600" checked />包含所有子节点</label>
+        <label class="flex cursor-pointer items-center gap-2 text-slate-600"><input id="mindMapExportSkipExisting" type="checkbox" class="rounded border-slate-300 text-violet-600" checked />跳过已导出过的节点</label>
+      </div>
+      <ul id="mindMapExportPreview" class="mb-4 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-slate-100 bg-white p-2 text-xs text-slate-700"></ul>
+      <div class="flex gap-3">
+        <button id="mindMapExportConfirm" type="button" class="flex-1 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">确认导出</button>
+        <button id="mindMapExportCancel" type="button" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mindMapFullscreenBackdrop" class="fixed inset-0 z-[55] hidden items-stretch justify-center bg-slate-900/55 p-3 backdrop-blur-sm opacity-0 transition-opacity duration-200 sm:p-6">
+    <div id="mindMapFullscreenPanel" class="flex h-full w-full max-w-6xl scale-[0.98] flex-col overflow-hidden rounded-2xl border border-white/80 bg-white shadow-2xl transition-transform duration-200">
+      <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <h3 class="font-display text-base font-semibold text-slate-900"><i class="fa-solid fa-diagram-project mr-2 text-brand-500"></i>思维导图 · 放大查看</h3>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="mindMapFsZoomOut" type="button" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+          <button id="mindMapFsZoomIn" type="button" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+          <button id="mindMapFsFit" type="button" class="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-800 hover:bg-brand-100">适应屏幕</button>
+          <button id="mindMapFsClose" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"><i class="fa-solid fa-xmark mr-1"></i>关闭</button>
+        </div>
+      </div>
+      <div id="mindMapFullscreenContainer" class="min-h-0 flex-1 bg-white"></div>
+    </div>
+  </div>
+
+  <div id="modalBackdrop" class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+    <div id="modalPanel" class="w-full max-w-md scale-95 rounded-2xl border border-white/80 bg-white p-6 shadow-2xl transition-all duration-300">
+      <div class="mb-4 flex items-center justify-between">
+        <h3 id="modalTitle" class="font-display text-lg font-semibold text-slate-900">编辑任务</h3>
+        <button id="modalClose" type="button" class="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="taskForm" class="space-y-3">
+        <input type="hidden" id="taskId" />
+        <div><label for="taskTitle" class="mb-1 block text-sm font-medium text-slate-700">标题</label><input id="taskTitle" type="text" required maxlength="120" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-200" /></div>
+        <div><label for="taskDate" class="mb-1 block text-sm font-medium text-slate-700">日期</label><input id="taskDate" type="date" required class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-200" /></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label for="taskDuration" class="mb-1 block text-sm font-medium text-slate-700">时长(分)</label><input id="taskDuration" type="number" min="5" max="1440" value="45" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></div>
+          <div><label for="taskPriority" class="mb-1 block text-sm font-medium text-slate-700">优先级</label><select id="taskPriority" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="2">高</option><option value="1" selected>中</option><option value="0">低</option></select></div>
+        </div>
+        <div><label for="taskCategory" class="mb-1 block text-sm font-medium text-slate-700">分类</label><select id="taskCategory" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"><option value="项目">项目</option><option value="练习">练习</option><option value="阅读">阅读</option><option value="其他" selected>其他</option></select></div>
+        <div class="flex items-center gap-2"><input id="taskCompleted" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand-600" /><label for="taskCompleted" class="text-sm text-slate-700">已完成</label></div>
+        <div class="flex gap-3 pt-2"><button type="submit" class="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">保存</button><button id="modalCancel" type="button" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50">取消</button></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app-config.js"></script>
+  <script src="js/plan-supabase.js"></script>
+  <script src="js/app-nav.js"></script>
+  <script src="js/mindmap-page.js"></script>
+</body>
+</html>
